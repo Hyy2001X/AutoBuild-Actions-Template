@@ -4,27 +4,51 @@
 # AutoBuild Functions
 
 GET_TARGET_INFO() {
+	Home=${GITHUB_WORKSPACE}/openwrt
+	echo "Home Path: ${Home}"
 	[ -f ${GITHUB_WORKSPACE}/Openwrt.info ] && . ${GITHUB_WORKSPACE}/Openwrt.info
 	Default_File="package/lean/default-settings/files/zzz-default-settings"
 	[ -f ${Default_File} ] && Lede_Version="$(egrep -o "R[0-9]+\.[0-9]+\.[0-9]+" ${Default_File})"
 	[[ -z ${Lede_Version} ]] && Lede_Version="Openwrt"
 	Openwrt_Version="${Lede_Version}-${Compile_Date}"
-	TARGET_PROFILE="$(egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/')"
+	x86_Test="$(egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/CONFIG_TARGET_(.*)_DEVICE_(.*)=y/\1/')"
+	if [[ "${x86_Test}" == "x86_64" ]];then
+		TARGET_PROFILE="x86_64"
+	else
+		TARGET_PROFILE="$(egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/')"
+	fi
 	[[ -z "${TARGET_PROFILE}" ]] && TARGET_PROFILE="${Default_Device}"
+	case "${TARGET_PROFILE}" in
+	x86_64)
+		grep "CONFIG_TARGET_IMAGES_GZIP=y" ${Home}/.config
+		if [[ ! $? -ne 0 ]];then
+			Firmware_sfx="img.gz"
+		else
+			Firmware_sfx="img"
+		fi
+	;;
+	*)
+		Firmware_sfx="bin"
+	;;
+	esac
 	TARGET_BOARD="$(awk -F '[="]+' '/TARGET_BOARD/{print $2}' .config)"
 	TARGET_SUBTARGET="$(awk -F '[="]+' '/TARGET_SUBTARGET/{print $2}' .config)"
 	Github_Repo="$(grep "https://github.com/[a-zA-Z0-9]" ${GITHUB_WORKSPACE}/.git/config | cut -c8-100)"
+	AutoBuild_Info=${GITHUB_WORKSPACE}/openwrt/package/base-files/files/etc/openwrt_info
 }
 
 Diy_Part1_Base() {
 	Diy_Core
 	Mkdir package/lean
+	Replace_File Customize/banner package/base-files/files/etc
+	Replace_File Customize/mac80211.sh package/kernel/mac80211/files/lib/wifi
 	if [[ "${INCLUDE_SSR_Plus}" == "true" ]];then
 		ExtraPackages git lean helloworld https://github.com/fw876 master
 		sed -i 's/143/143,25,5222/' package/lean/helloworld/luci-app-ssr-plus/root/etc/init.d/shadowsocksr
 	fi
 	if [[ "${INCLUDE_HelloWorld}" == "true" ]];then
 		ExtraPackages git lean luci-app-vssr https://github.com/jerrykuku master
+		ExtraPackages git lean lua-maxminddb https://github.com/jerrykuku master
 	fi
 	if [[ "${INCLUDE_Bypass}" == "true" ]];then
 		ExtraPackages git other luci-app-bypass https://github.com/garypang13 main
@@ -32,7 +56,7 @@ Diy_Part1_Base() {
 		find package/*/ feeds/*/ -maxdepth 2 -path "*luci-app-bypass/Makefile" | xargs -i sed -i 's/shadowsocksr-libev-ssr-server/shadowsocksr-libev-server/g' {}
 	fi
 	if [[ "${INCLUDE_OpenClash}" == "true" ]];then
-		ExtraPackages svn other luci-app-openclash https://github.com/vernesong/OpenClash/trunk
+		ExtraPackages git other OpenClash https://github.com/vernesong master
 	fi
 	if [[ "${INCLUDE_Keep_Latest_Xray}" == "true" ]];then
 		Update_Makefile xray-core package/lean/helloworld/xray-core
@@ -53,6 +77,9 @@ Diy_Part1_Base() {
 Diy_Part2_Base() {
 	Diy_Core
 	GET_TARGET_INFO
+	Replace_File Customize/uhttpd.po feeds/luci/applications/luci-app-uhttpd/po/zh-cn
+	Replace_File Customize/webadmin.po package/lean/luci-app-webadmin/po/zh-cn
+	Replace_File Customize/mwan3.config package/feeds/packages/mwan3/files/etc/config mwan3
 	if [[ "${INCLUDE_Enable_FirewallPort_53}" == "true" ]];then
 		[ -f "${Default_File}" ] && sed -i "s?iptables?#iptables?g" ${Default_File} > /dev/null 2>&1
 	fi
@@ -68,31 +95,62 @@ Diy_Part2_Base() {
 	else
 		sed -i "s?Openwrt?Openwrt ${Openwrt_Version}?g" package/base-files/files/etc/banner
 	fi
-	Replace_File Customize/uhttpd.po feeds/luci/applications/luci-app-uhttpd/po/zh-cn
-	Replace_File Customize/webadmin.po package/lean/luci-app-webadmin/po/zh-cn
 	[[ -z "${Author}" ]] && Author="Unknown"
 	echo "Author: ${Author}"
 	echo "Openwrt Version: ${Openwrt_Version}"
 	echo "Router: ${TARGET_PROFILE}"
 	echo "Github: ${Github_Repo}"
 	[ -f "$Default_File" ] && sed -i "s?${Lede_Version}?${Lede_Version} Compiled by ${Author} [${Display_Date}]?g" $Default_File
-	echo "${Openwrt_Version}" > package/base-files/files/etc/openwrt_info
-	echo "${Github_Repo}" >> package/base-files/files/etc/openwrt_info
-	echo "${TARGET_PROFILE}" >> package/base-files/files/etc/openwrt_info
+	echo "${Openwrt_Version}" > ${AutoBuild_Info}
+	echo "${Github_Repo}" >> ${AutoBuild_Info}
+	echo "${TARGET_PROFILE}" >> ${AutoBuild_Info}
+	echo "Firmware Type: ${Firmware_sfx}"
+	echo "Writting Type: ${Firmware_sfx} to ${AutoBuild_Info} ..."
+	echo "${Firmware_sfx}" >> ${AutoBuild_Info}
+	
 }
 
 Diy_Part3_Base() {
 	Diy_Core
 	GET_TARGET_INFO
-	Default_Firmware="openwrt-${TARGET_BOARD}-${TARGET_SUBTARGET}-${TARGET_PROFILE}-squashfs-sysupgrade.bin"
-	AutoBuild_Firmware="AutoBuild-${TARGET_PROFILE}-${Openwrt_Version}.bin"
-	AutoBuild_Detail="AutoBuild-${TARGET_PROFILE}-${Openwrt_Version}.detail"
+	Firmware_Path="bin/targets/${TARGET_BOARD}/${TARGET_SUBTARGET}"
 	Mkdir bin/Firmware
-	echo "Firmware: ${AutoBuild_Firmware}"
-	mv -f bin/targets/"${TARGET_BOARD}/${TARGET_SUBTARGET}/${Default_Firmware}" bin/Firmware/"${AutoBuild_Firmware}"
-	_MD5=$(md5sum bin/Firmware/${AutoBuild_Firmware} | cut -d ' ' -f1)
-	_SHA256=$(sha256sum bin/Firmware/${AutoBuild_Firmware} | cut -d ' ' -f1)
-	echo -e "\nMD5:${_MD5}\nSHA256:${_SHA256}" > bin/Firmware/"${AutoBuild_Detail}"
+	case "${TARGET_PROFILE}" in
+	x86_64)
+		cd ${Firmware_Path}
+		Firmware=openwrt-${TARGET_BOARD}-${TARGET_SUBTARGET}-generic-squashfs-combined
+		AutoBuild_Firmware="AutoBuild-${TARGET_PROFILE}-${Openwrt_Version}"
+		if [ -f "${Firmware}${Firmware_sfx}" ];then
+			_MD5=$(md5sum ${Firmware}${Firmware_sfx} | cut -d ' ' -f1)
+			_SHA256=$(sha256sum ${Firmware}${Firmware_sfx} | cut -d ' ' -f1)
+			touch ${Home}/bin/Firmware/${AutoBuild_Firmware}.detail
+			echo -e "\nMD5:${_MD5}\nSHA256:${_SHA256}" > ${Home}/bin/Firmware/${AutoBuild_Firmware}-Legacy.detail
+			mv -f ${Firmware}.${Firmware_sfx} ${Home}/bin/Firmware/${AutoBuild_Firmware}-Legacy${Firmware_sfx}
+			echo "Legacy Firmware is detected !"
+		fi
+		if [ -f "${Firmware}-efi${Firmware_sfx}" ];then
+			_MD5=$(md5sum ${Firmware}-efi${Firmware_sfx} | cut -d ' ' -f1)
+			_SHA256=$(sha256sum ${Firmware}-efi${Firmware_sfx} | cut -d ' ' -f1)
+			touch ${Home}/bin/Firmware/${AutoBuild_Firmware}.detail
+			echo -e "\nMD5:${_MD5}\nSHA256:${_SHA256}" > ${Home}/bin/Firmware/${AutoBuild_Firmware}-UEFI.detail
+			cp ${Firmware}-efi.${Firmware_sfx} ${Home}/bin/Firmware/${AutoBuild_Firmware}-UEFI${Firmware_sfx}
+			echo "UEFI Firmware is detected !"
+		fi
+	;;
+	*)
+		cd ${Home}
+		Default_Firmware="openwrt-${TARGET_BOARD}-${TARGET_SUBTARGET}-${TARGET_PROFILE}-squashfs-sysupgrade.${Firmware_sfx}"
+		AutoBuild_Firmware="AutoBuild-${TARGET_PROFILE}-${Openwrt_Version}.${Firmware_sfx}"
+		AutoBuild_Detail="AutoBuild-${TARGET_PROFILE}-${Openwrt_Version}.detail"
+		echo "Firmware: ${AutoBuild_Firmware}"
+		mv -f ${Firmware_Path}/${Default_Firmware} bin/Firmware/${AutoBuild_Firmware}
+		_MD5=$(md5sum bin/Firmware/${AutoBuild_Firmware} | cut -d ' ' -f1)
+		_SHA256=$(sha256sum bin/Firmware/${AutoBuild_Firmware} | cut -d ' ' -f1)
+		echo -e "\nMD5:${_MD5}\nSHA256:${_SHA256}" > bin/Firmware/${AutoBuild_Detail}
+	;;
+	esac
+	cd ${Home}
+	echo "Actions Avaliable: $(df -h | grep "/dev/root" | awk '{printf $4}')"
 }
 
 Mkdir() {
@@ -122,8 +180,7 @@ ExtraPackages() {
 		git)
 		
 			if [[ -z "${REPO_BRANCH}" ]];then
-				echo "[$(date "+%H:%M:%S")] Missing important options,skip check out..."
-				break
+				REPO_BRANCH="master"
 			fi
 			git clone -b ${REPO_BRANCH} ${REPO_URL}/${PKG_NAME} ${PKG_NAME} > /dev/null 2>&1
 		;;
@@ -171,9 +228,9 @@ Replace_File() {
 }
 
 Update_Makefile() {
-	PKG_NAME="$1"
-	Makefile="$2/Makefile"
-	[ -f /tmp/tmp_file ] && rm -f /tmp/tmp_file
+	PKG_NAME=${1}
+	Makefile=${2}/Makefile
+	[ -f "/tmp/tmp_file" ] && rm -f /tmp/tmp_file
 	if [ -f "${Makefile}" ];then
 		PKG_URL_MAIN="$(grep "PKG_SOURCE_URL:=" ${Makefile} | cut -c17-100)"
 		_process1=${PKG_URL_MAIN##*com/}

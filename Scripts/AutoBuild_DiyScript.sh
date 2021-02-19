@@ -22,7 +22,9 @@ Diy_Core() {
 
 Diy-Part1() {
 	Diy_Part1_Base
-	Replace_File Customize/banner package/base-files/files/etc
+	
+	ExtraPackages git other luci-app-adguardhome https://github.com/Hyy2001X master
+	ExtraPackages git other luci-app-shutdown https://github.com/Hyy2001X master
 }
 
 Diy-Part2() {
