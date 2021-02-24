@@ -9,20 +9,20 @@ Diy_Core() {
 
 	INCLUDE_AutoUpdate=true
 	INCLUDE_AutoBuild_Tools=true
-	INCLUDE_Keep_Latest_Xray=false
 	INCLUDE_mt7621_OC1000MHz=false
-	INCLUDE_Enable_FirewallPort_53=false
 
 	INCLUDE_SSR_Plus=true
 	INCLUDE_Passwall=false
 	INCLUDE_HelloWorld=false
 	INCLUDE_Bypass=false
 	INCLUDE_OpenClash=false
+	INCLUDE_OAF=false
 }
 
 Diy-Part1() {
 	Diy_Part1_Base
-	
+
+	ExtraPackages git lean luci-theme-argon https://github.com/jerrykuku 18.06
 	ExtraPackages git other luci-app-adguardhome https://github.com/Hyy2001X master
 	ExtraPackages git other luci-app-shutdown https://github.com/Hyy2001X master
 }

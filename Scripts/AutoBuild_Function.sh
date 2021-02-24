@@ -41,7 +41,6 @@ Diy_Part1_Base() {
 	Diy_Core
 	Mkdir package/lean
 	Replace_File Customize/banner package/base-files/files/etc
-	Replace_File Customize/mac80211.sh package/kernel/mac80211/files/lib/wifi
 	if [[ "${INCLUDE_SSR_Plus}" == "true" ]];then
 		ExtraPackages git lean helloworld https://github.com/fw876 master
 		sed -i 's/143/143,25,5222/' package/lean/helloworld/luci-app-ssr-plus/root/etc/init.d/shadowsocksr
@@ -49,6 +48,8 @@ Diy_Part1_Base() {
 	if [[ "${INCLUDE_HelloWorld}" == "true" ]];then
 		ExtraPackages git lean luci-app-vssr https://github.com/jerrykuku master
 		ExtraPackages git lean lua-maxminddb https://github.com/jerrykuku master
+		PKG_Finder d package xray-core
+		[[ -z "${PKG_RESULT}" ]] && ExtraPackages svn other xray-core https://github.com/fw876/helloworld/trunk
 	fi
 	if [[ "${INCLUDE_Bypass}" == "true" ]];then
 		ExtraPackages git other luci-app-bypass https://github.com/garypang13 main
@@ -57,11 +58,6 @@ Diy_Part1_Base() {
 	fi
 	if [[ "${INCLUDE_OpenClash}" == "true" ]];then
 		ExtraPackages git other OpenClash https://github.com/vernesong master
-	fi
-	if [[ "${INCLUDE_Keep_Latest_Xray}" == "true" ]];then
-		Update_Makefile xray-core package/lean/helloworld/xray-core
-		# Update_Makefile v2ray package/lean/v2ray
-		# Update_Makefile v2ray-plugin package/lean/v2ray-plugin
 	fi
 	if [[ "${INCLUDE_AutoBuild_Tools}" == "true" ]];then
 		Replace_File Scripts/AutoBuild_Tools.sh package/base-files/files/bin
@@ -72,6 +68,14 @@ Diy_Part1_Base() {
 	if [[ "${INCLUDE_mt7621_OC1000MHz}" == "true" ]];then
 		Replace_File Customize/102-mt7621-fix-cpu-clk-add-clkdev.patch target/linux/ramips/patches-5.4
 	fi
+	if [[ "${INCLUDE_OAF}" == "true" ]];then
+		echo "Warning: OpenAppFilter may conflict with FLowoffload/SFE !"
+		ExtraPackages git other OpenAppFilter https://github.com/destan19
+	fi
+	Update_Makefile xray-core package/lean/helloworld/xray-core
+	Update_Makefile exfat package/kernel/exfat
+	ExtraPackages svn lean luci-app-kodexplorer https://github.com/project-openwrt/openwrt/trunk/package/lean
+	# ExtraPackages svn kernel mt76 https://github.com/openwrt/openwrt/trunk/package/kernel
 }
 
 Diy_Part2_Base() {
@@ -80,9 +84,15 @@ Diy_Part2_Base() {
 	Replace_File Customize/uhttpd.po feeds/luci/applications/luci-app-uhttpd/po/zh-cn
 	Replace_File Customize/webadmin.po package/lean/luci-app-webadmin/po/zh-cn
 	Replace_File Customize/mwan3.config package/feeds/packages/mwan3/files/etc/config mwan3
-	if [[ "${INCLUDE_Enable_FirewallPort_53}" == "true" ]];then
-		[ -f "${Default_File}" ] && sed -i "s?iptables?#iptables?g" ${Default_File} > /dev/null 2>&1
-	fi
+	case ${TARGET_PROFILE} in
+	d-team_newifi-d2)
+		Replace_File Customize/system_newifi-d2 package/base-files/files/etc/config system
+	;;
+	*)
+		Replace_File Customize/system_common package/base-files/files/etc/config system
+	;;
+	esac
+	[ -f "${Default_File}" ] && sed -i "s?iptables?#iptables?g" ${Default_File} > /dev/null 2>&1
 	if [[ "${INCLUDE_AutoUpdate}" == "true" ]];then
 		ExtraPackages git lean luci-app-autoupdate https://github.com/Hyy2001X main
 		sed -i '/luci-app-autoupdate/d' .config > /dev/null 2>&1
@@ -118,22 +128,23 @@ Diy_Part3_Base() {
 	case "${TARGET_PROFILE}" in
 	x86_64)
 		cd ${Firmware_Path}
-		Firmware=openwrt-${TARGET_BOARD}-${TARGET_SUBTARGET}-generic-squashfs-combined
+		Legacy_Firmware=openwrt-${TARGET_BOARD}-${TARGET_SUBTARGET}-generic-squashfs-combined.${Firmware_sfx}
+		EFI_Firmware=openwrt-${TARGET_BOARD}-${TARGET_SUBTARGET}-generic-squashfs-combined-efi.${Firmware_sfx}
 		AutoBuild_Firmware="AutoBuild-${TARGET_PROFILE}-${Openwrt_Version}"
-		if [ -f "${Firmware}${Firmware_sfx}" ];then
-			_MD5=$(md5sum ${Firmware}${Firmware_sfx} | cut -d ' ' -f1)
-			_SHA256=$(sha256sum ${Firmware}${Firmware_sfx} | cut -d ' ' -f1)
+		if [ -f "${Legacy_Firmware}" ];then
+			_MD5=$(md5sum ${Legacy_Firmware} | cut -d ' ' -f1)
+			_SHA256=$(sha256sum ${Legacy_Firmware} | cut -d ' ' -f1)
 			touch ${Home}/bin/Firmware/${AutoBuild_Firmware}.detail
 			echo -e "\nMD5:${_MD5}\nSHA256:${_SHA256}" > ${Home}/bin/Firmware/${AutoBuild_Firmware}-Legacy.detail
-			mv -f ${Firmware}.${Firmware_sfx} ${Home}/bin/Firmware/${AutoBuild_Firmware}-Legacy${Firmware_sfx}
+			mv -f ${Legacy_Firmware} ${Home}/bin/Firmware/${AutoBuild_Firmware}-Legacy.${Firmware_sfx}
 			echo "Legacy Firmware is detected !"
 		fi
-		if [ -f "${Firmware}-efi${Firmware_sfx}" ];then
-			_MD5=$(md5sum ${Firmware}-efi${Firmware_sfx} | cut -d ' ' -f1)
-			_SHA256=$(sha256sum ${Firmware}-efi${Firmware_sfx} | cut -d ' ' -f1)
-			touch ${Home}/bin/Firmware/${AutoBuild_Firmware}.detail
+		if [ -f "${EFI_Firmware}" ];then
+			_MD5=$(md5sum ${EFI_Firmware} | cut -d ' ' -f1)
+			_SHA256=$(sha256sum ${EFI_Firmware} | cut -d ' ' -f1)
+			touch ${Home}/bin/Firmware/${AutoBuild_Firmware}-UEFI.detail
 			echo -e "\nMD5:${_MD5}\nSHA256:${_SHA256}" > ${Home}/bin/Firmware/${AutoBuild_Firmware}-UEFI.detail
-			cp ${Firmware}-efi.${Firmware_sfx} ${Home}/bin/Firmware/${AutoBuild_Firmware}-UEFI${Firmware_sfx}
+			cp ${EFI_Firmware} ${Home}/bin/Firmware/${AutoBuild_Firmware}-UEFI.${Firmware_sfx}
 			echo "UEFI Firmware is detected !"
 		fi
 	;;
@@ -160,6 +171,18 @@ Mkdir() {
 		mkdir -p ${_DIR}
 	fi
 	unset _DIR
+}
+
+PKG_Finder() {
+	unset PKG_RESULT
+	PKG_TYPE=${1}
+	PKG_DIR=${2}
+	PKG_NAME=${3}
+	[[ -z ${PKG_TYPE} ]] && [[ -z ${PKG_NAME} ]] || [[ -z ${PKG_DIR} ]] && return
+	PKG_RESULT=$(find -name ${PKG_DIR}/${PKG_NAME} -type ${PKG_TYPE} -exec echo {} \;)
+	if [[ ! -z "${PKG_RESULT}" ]];then
+		echo "[${PKG_NAME}] is detected,Dir: ${PKG_RESULT}"
+	fi
 }
 
 ExtraPackages() {
