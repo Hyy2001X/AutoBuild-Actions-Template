@@ -3,7 +3,7 @@
 # AutoBuild Module by Hyy2001
 # AutoUpdate for Openwrt
 
-Version=V5.2
+Version=V5.4
 
 TIME() {
 	echo -ne "\n[$(date "+%H:%M:%S")] "
@@ -59,14 +59,15 @@ List_Info() {
 Shell_Helper() {
 	echo -e "\n使用方法: bash /bin/AutoUpdate.sh [参数1] [参数2]"
 	echo -e "\n支持下列参数:\n"
-	echo "	-q	更新固件,不打印备份信息日志[保留配置]"
-	echo "	-n	更新固件[不保留配置]"
-	echo "	-f	强制更新固件,即跳过版本号验证,自动下载以及安装必要软件包[保留配置]"
-	echo "	-u	适用于定时更新 LUCI 的参数[保留配置]"
-	echo "	-c	[参数2:<地址>] 更换 Github 检查更新以及固件下载地址"
+	echo "	-q	更新固件,不打印备份信息日志 [保留配置]"
+	echo "	-n	更新固件 [不保留配置]"
+	echo "	-f	强制更新固件,即跳过版本号验证,自动下载以及安装必要软件包 [保留配置]"
+	echo "	-u	适用于定时更新 LUCI 的参数 [保留配置]"
+	echo "	-c	[参数2:<Github 地址>] 更换 Github 检查更新以及固件下载地址"
+	echo "	-b	[参数2:<引导方式 UEFI/Legacy>] 指定 x86 设备下载使用 UEFI/Legacy 引导的固件 [危险]"
 	echo "	-l	列出所有信息"
 	echo "	-d	清除固件下载缓存"
-	echo -e "	-h	打印此帮助信息\n"
+	echo -e "	-h	打印帮助信息\n"
 	exit
 }
 
@@ -87,24 +88,34 @@ x86_64)
 	else
 		Compressed_x86="0"
 	fi
-	if [ -d /sys/firmware/efi ];then
-		EFI_Boot="1"
-		BOOT_Type="-UEFI"
+	if [ -f /etc/openwrt_boot ];then
+		BOOT_Type="-$(cat /etc/openwrt_boot)"
 	else
-		EFI_Boot="0"
-		BOOT_Type="-Legacy"
+		if [ -d /sys/firmware/efi ];then
+			BOOT_Type="-UEFI"
+		else
+			BOOT_Type="-Legacy"
+		fi
 	fi
+	case "${BOOT_Type}" in
+	-Legacy)
+		EFI_Boot=0
+	;;
+	-UEFI)
+		EFI_Boot=1
+	;;
+	esac
 	Firmware_SFX="${BOOT_Type}.${Firmware_Type}"
 	Detail_SFX="${BOOT_Type}.detail"
 	CURRENT_Device="x86_64"
-	Space_RQM=500
+	Space_RQM=480
 ;;
 *)
 	CURRENT_Device="$(jsonfilter -e '@.model.id' < /etc/board.json | tr ',' '_')"
 	Firmware_SFX=".${Firmware_Type}"
 	[[ -z ${Firmware_SFX} ]] && Firmware_SFX=".bin"
 	Detail_SFX=".detail"
-	Space_RQM=50
+	Space_RQM=30
 esac
 Github_Download="${Github}/releases/download/AutoUpdate"
 Author="${Github##*com/}"
@@ -152,6 +163,21 @@ else
 	-h | --help)
 		Shell_Helper
 	;;
+	-b)
+		[[ -z "${Input_Other}" ]] && Shell_Helper
+		case "${Input_Other}" in
+		UEFI | Legacy)
+			echo "${Input_Other}" > openwrt_boot
+			sed -i '/openwrt_boot/d' /etc/sysupgrade.conf
+			echo -e "\n/etc/openwrt_boot" >> /etc/sysupgrade.conf
+			TIME && echo "固件引导方式已指定为: ${Input_Other}!"
+		;;
+		*)
+			echo -e "\n当前仅支持的选项: [UEFI/Legacy] !"
+		;;
+		esac
+		exit
+	;;
 	*)
 		echo -e "\nERROR INPUT: [$*]"
 		Shell_Helper
@@ -162,7 +188,7 @@ else
 	fi
 fi
 if [[ "${TMP_Available}" -lt "${Space_RQM}" ]];then
-	TIME && echo "/tmp 空间不足: [${Space_RQM}M],无法执行程序!"
+	TIME && echo "/tmp 空间不足: [${Space_RQM}M],无法执行更新!"
 	exit
 fi
 if [[ ! "${Force_Update}" == "1" ]] && [[ ! "${AutoUpdate_Mode}" == "1" ]];then
@@ -200,7 +226,7 @@ Firmware="${GET_Firmware}"
 Firmware_Detail="${Firmware_Info}${Detail_SFX}"
 echo -e "\n固件作者: ${Author%/*}"
 echo "设备名称: ${CURRENT_Device}"
-echo "固件格式: ${Detail_SFX}"
+echo "固件格式: ${Firmware_SFX}"
 echo -e "\n当前固件版本: ${CURRENT_Version}"
 echo "云端固件版本: ${GET_Version}"
 if [[ ! ${Force_Update} == 1 ]];then
@@ -240,14 +266,14 @@ CURRENT_MD5=$(md5sum ${Firmware} | cut -d ' ' -f1)
 echo -e "\n本地固件MD5:${CURRENT_MD5}"
 echo "云端固件MD5:${GET_MD5}"
 if [[ -z "${GET_MD5}" ]] || [[ -z "${CURRENT_MD5}" ]];then
-	TIME && echo -e "MD5 获取失败!"
+	TIME && echo "MD5 获取失败!"
 	exit
 fi
 if [[ ! "${GET_MD5}" == "${CURRENT_MD5}" ]];then
-	TIME && echo -e "MD5 对比失败,请检查网络后重试!"
+	TIME && echo "MD5 对比失败,请检查网络后重试!"
 	exit
 else
-	TIME && echo -e "MD5 对比通过!"
+	TIME && echo "MD5 对比通过!"
 fi
 if [[ ${Compressed_x86} == 1 ]];then
 	TIME && echo "检测到固件为 [.gz] 压缩格式,开始解压固件..."
@@ -261,9 +287,9 @@ if [[ ${Compressed_x86} == 1 ]];then
 		exit
 	fi
 fi
-TIME && echo -e "一切准备就绪,5s 后开始更新固件...\n"
+TIME && echo -e "一切准备就绪,5s 后开始更新固件..."
 sleep 5
-TIME && echo -e "正在更新固件,期间请耐心等待..."
+TIME && echo "正在更新固件,期间请耐心等待..."
 sysupgrade ${Upgrade_Options} ${Firmware}
 if [[ $? -ne 0 ]];then
 	TIME && echo "固件刷写失败,请尝试不保留配置[-n]或手动下载固件!"

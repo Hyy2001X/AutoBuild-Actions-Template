@@ -6,7 +6,7 @@
 # Modify: Hyy2001X
 #=======================================================
 
-name: AutoBuild
+name: AutoBuild-x86_64
 
 on:
   repository_dispatch:
@@ -25,11 +25,11 @@ on:
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
-  CONFIG_FILE: Configs/.config
+  CONFIG_FILE: Configs/x86_64.config
   DIY_SCRIPT: Scripts/AutoBuild_DiyScript.sh
   FUNCTION_SCRIPT: Scripts/AutoBuild_Function.sh
   UPLOAD_RELEASE: true
-  UPLOAD_FIRMWARE: false
+  UPLOAD_FIRMWARE: true
   UPLOAD_BIN_DIR: false
   REMOVE_OLD_RELEASE: false
   REMOVE_WORKFLOW_RUNS: true
@@ -46,8 +46,8 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        docker rmi `docker images -q`
         echo "Deleting files, please wait ..."
+        docker rmi `docker images -q`
         sudo rm -rf \
           /usr/share/dotnet \
           /etc/mysql \
@@ -72,6 +72,9 @@ jobs:
         sudo timedatectl set-timezone "Asia/Shanghai"
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
+        echo "Compile_Date=$(date +%Y%m%d)" > $GITHUB_WORKSPACE/Openwrt.info
+        echo "Display_Date=$(date +'%Y/%m/%d')" >> $GITHUB_WORKSPACE/Openwrt.info
+        echo "## $(date +"%Y%m%d")-x86_64" > update_log.txt
 
     - name: Clone Openwrt source code
       run: |
@@ -84,8 +87,6 @@ jobs:
         cd openwrt
         source $GITHUB_WORKSPACE/$DIY_SCRIPT
         source $GITHUB_WORKSPACE/$FUNCTION_SCRIPT && Diy-Part1
-        echo "Compile_Date=$(date +%Y%m%d)" > $GITHUB_WORKSPACE/Openwrt.info
-        echo "Display_Date=$(date +'%Y/%m/%d')" >> $GITHUB_WORKSPACE/Openwrt.info
 
     - name: Update & Install Feeds
       run: |
@@ -121,7 +122,6 @@ jobs:
 
     - name: Run Diy-Part3 Scripts
       run: |
-        echo "## $(date +"%Y%m%d")" > update_log.txt
         cd openwrt
         source $GITHUB_WORKSPACE/$DIY_SCRIPT
         source $GITHUB_WORKSPACE/$FUNCTION_SCRIPT && Diy-Part3
