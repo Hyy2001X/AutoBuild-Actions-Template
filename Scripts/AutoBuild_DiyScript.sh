@@ -4,23 +4,15 @@
 # AutoBuild DiyScript
 
 Diy_Core() {
-	Author=
-	Default_Device=
+	Author=Hyy2001
+	Default_Device=x86_64
 
 	INCLUDE_AutoUpdate=true
-	INCLUDE_AutoBuild_Tools=true
+	INCLUDE_AutoBuild_Tools=false
 	INCLUDE_DRM_I915=false
+	INCLUDE_Obsolete_PKG_Compatible=false
 }
 
-Diy-Part1() {
-	Diy_Part1_Base
-
-}
-
-Diy-Part2() {
-	Diy_Part2_Base
-}
-
-Diy-Part3() {
-	Diy_Part3_Base
+Firmware-Diy() {
+	:
 }
