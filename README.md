@@ -1,10 +1,10 @@
-## Actions for Building OpenWRT
+# Actions for Building OpenWrt / AutoUpdate
 
 测试通过的设备: `d-team_newifi-d2(bin)`、`x86_64(img、img.gz)`
 
-测试通过的源码: `coolsnowwolf/lede:master`、`immortalwrt/immortalwrt:openwrt-18.06`
+测试通过的源码: `coolsnowwolf/lede`、`immortalwrt/immortalwrt`、`openwrt/openwrt:!lede-17.01`
 
-## Github Actions 部署指南(STEP 1):
+## 部署环境(STEP 1):
 
 1. 首先需要获取 **Github Token**: [点击这里](https://github.com/settings/tokens/new) 获取,
 
@@ -18,11 +18,11 @@
 
    其中`Name`项填写`GITHUB_TOKEN`,然后将你的 **Token** 粘贴到`Value`项,完成后点击`Add secert`
 
-## 客制化固件(STEP 2):
+## 定制固件(STEP 2):
 
 1. 进入你的`AutoBuild-Actions`仓库,**下方所有操作都将在你的`AutoBuild-Actions`仓库下进行**
 
-2. 把本地的 '.config' 文件重命名为**设备名称**并上传到`/Configs`
+2. 把本地的 '.config' 文件重命名为你的**设备名称**并上传到`/Configs`
 
 3. 编辑`.github/workflows/*.yml`文件,修改`第 9 和 29 行`为你的**设备名称**
 
@@ -32,11 +32,7 @@
 
    **软件包列表** 编辑`CustomPackages`下对应**设备名称**的文件,按照现有语法为**特定设备**添加软件包
 
-   **定时编译** 先删除`第 20-21 行 #`注释,然后按需修改相关参数,[使用方法](https://www.runoob.com/w3cnote/linux-crontab-tasks.html)
-
-   **一键编译** 先删除`第 23-24 行 #`注释,单(双)击右上角 **Star** 重新点亮 **Star** 即可一键编译
-
-**AutoBuild_DiyScript.sh Diy_Core() 的赋值解释:**
+**AutoBuild_DiyScript.sh: Diy_Core() 的赋值解释:**
 ```
    Author 作者名称,这个名称将在 OpenWrt 首页显示
 
@@ -46,12 +42,13 @@
 
    INCLUDE_AutoBuild_Tools 添加 Scripts/AutoBuild_Tools.sh 到固件
 
-   INCLUDE_DRM_I915 添加 Intel Graphics 驱动(仅部分 x86_64 平台可用)
+   INCLUDE_DRM_I915 添加 Intel Graphics 驱动(仅部分平台可用)
+
+   INCLUDE_Theme_Argon 自动识别并添加适用源码的 luci-theme-argon 主题包
 
    INCLUDE_Obsolete_PKG_Compatible 优化原生 OpenWrt-19.07、21.02 支持(测试特性)
 ```
-
-   **其他指令:** 编辑`Scripts/AutoBuild_DiyScript.sh`,参照下方语法:
+**其他指令:** 编辑`Scripts/AutoBuild_DiyScript.sh`,参照下方语法:
 ```
    [使用 git clone 拉取文件]  ExtraPackages git 存放位置 软件包名 仓库地址 分支
 
@@ -59,6 +56,15 @@
 
    [替换 /CustomFiles 文件到源码] Replace_File 文件名称 目标路径 重命名(可选)
 ```
+## 编译固件(STEP 3):
+
+   **一键编译** 先删除`第 23-24 行 #`注释,单(双)击右上角 **Star** 重新点亮 **Star** 即可一键编译
+
+   **定时编译** 先删除`第 20-21 行 #`注释,然后按需修改相关参数,[使用方法](https://www.runoob.com/w3cnote/linux-crontab-tasks.html)
+   
+   **手动编译** 点击上方`Actions`,选择你要编译的设备,点击右方`Run workflow`,再次点击即可开始编译
+   
+   **SSH 连接** 使用方法参见 [P3TERX's Blog](https://p3terx.com/archives/build-openwrt-with-github-actions.html)
 
 ## 使用一键更新固件脚本:
 
