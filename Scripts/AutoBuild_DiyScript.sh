@@ -1,6 +1,5 @@
 #!/bin/bash
-# https://github.com/Hyy2001X/AutoBuild-Actions
-# AutoBuild Module by Hyy2001
+# AutoBuild Module by Hyy2001 <https://github.com/Hyy2001X/AutoBuild-Actions>
 # AutoBuild DiyScript
 
 Diy_Core() {
@@ -17,12 +16,5 @@ Diy_Core() {
 }
 
 Firmware-Diy() {
-	Update_Makefile exfat $(PKG_Finder d package exfat)
-	AddPackage svn ../feeds/packages/admin netdata https://github.com/openwrt/packages/trunk/admin
-
-	case ${TARGET_PROFILE} in
-	d-team_newifi-d2)
-		# Replace_File CustomFiles/Patches/102-mt7621-fix-cpu-clk-add-clkdev.patch target/linux/ramips/patches-5.4
-	;;
-	esac
+	:
 }
