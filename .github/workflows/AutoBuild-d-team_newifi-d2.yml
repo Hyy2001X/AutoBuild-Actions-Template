@@ -4,45 +4,48 @@
 #   Author: Hyy2001X                                      #
 ###########################################################
 
-name: AutoBuild-Test
+name: AutoBuild-d-team_newifi-d2
 
 ### 以下内容请保持不变 (修改 环境变量设置 中的信息)
 on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      SSH:
-        description: 'SSH 连接到 Actions'
-        required: true
-        default: 'false'
-      TARGET_PROFILE:
-        description: '设备名称 (获取方法参考 README)'
-        default: 'x86_64'
-      DEFAULT_SOURCE:
-        description: '源码:分支 [必选]'
-        default: 'coolsnowwolf/lede:master'
-      IP:
+      ip_addr:
         description: '固件 IP 地址 [可选]'
         default: ''
-      DELETE_USELESS_FILES:
-        description: '清理无用文件 [可选]'
-        default: 'true'
 ### END
+
+  #push:
+  #  branches: 
+  #    - master
+
+  #schedule:
+  #  - cron: 0 8 * * 5
+
+  #watch:
+  #  types: [started]
 
 ### 环境变量设置
 env:
+# 设备名称 (可在 README 中找到获取方法)
+  TARGET_PROFILE: d-team_newifi-d2
+# 源码仓库:分支
+  DEFAULT_SOURCE: coolsnowwolf/lede:master
 # 上传固件到 Github Releases
   UPLOAD_RELEASES: true
 # 上传固件到 Github Artifacts
   UPLOAD_ARTIFACTS: false
 # 上传 bin 文件夹到 Github Artifacts
-  UPLOAD_BIN_ARTIFACTS: true
+  UPLOAD_BIN_ARTIFACTS: false
+# 删除无用文件以释放更多空间
+  DELETE_USELESS_FILES: true
 # 删除早期的 workflow 任务
   DELETE_OLD_WORKFLOW: true
 ### END
 
 jobs:
-  Compile:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -51,9 +54,9 @@ jobs:
 
     - name: Initialization Define Info
       run: |
-        TARGET_PROFILE=${{ github.event.inputs.TARGET_PROFILE }}
-        DEFAULT_SOURCE=${{ github.event.inputs.DEFAULT_SOURCE }}
-        DELETE_USELESS_FILES=${{ github.event.inputs.DELETE_USELESS_FILES }}
+        TARGET_PROFILE=${{ env.TARGET_PROFILE }}
+        DEFAULT_SOURCE=${{ env.DEFAULT_SOURCE }}
+        DELETE_USELESS_FILES=${{ env.DELETE_USELESS_FILES }}
         echo "TARGET_PROFILE=$TARGET_PROFILE" >> $GITHUB_ENV
         echo "DELETE_USELESS_FILES=$DELETE_USELESS_FILES" >> $GITHUB_ENV
         [ ! -f "$GITHUB_WORKSPACE/Configs/$TARGET_PROFILE" ] && {
@@ -109,13 +112,6 @@ jobs:
         Firmware-Diy_Base
         source $GITHUB_WORKSPACE/openwrt/VARIABLE_FILE_Sec && Firmware-Diy
         rm -f .config && cp $GITHUB_WORKSPACE/Configs/$TARGET_PROFILE .config
-
-    - name: SSH Connection to Actions
-      uses: P3TERX/ssh2actions@v1.0.0
-      if: (github.event.inputs.SSH == 'true' && github.event.inputs.SSH  != 'false') || contains(github.event.action, 'SSH')
-      env:
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
     - name: Compile
       run: |

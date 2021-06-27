@@ -1,1 +1,2 @@
-git other luci-app-adguardhome Hyy2001X
+svn other luci-app-smartdns kenzok8/openwrt-packages/trunk
+git other luci-app-serverchan tty228

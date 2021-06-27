@@ -4,17 +4,25 @@
 
 Diy_Core() {
 	Author=Hyy2001
-	Default_Device=
+	Default_TARGET_PROFILE=auto
 	Short_Firmware_Date=true
-	Default_IP_Address=192.168.1.1
+	Default_LAN_IP=false
 
-	INCLUDE_AutoUpdate=true
-	INCLUDE_AutoBuild_Tools=true
+	INCLUDE_AutoBuild_Features=true
 	INCLUDE_DRM_I915=false
-	INCLUDE_Theme_Argon=true
+	INCLUDE_Argon=true
 	INCLUDE_Obsolete_PKG_Compatible=false
 }
 
 Firmware-Diy() {
-	:
+	case "${TARGET_PROFILE}" in
+	d-team_newifi-d2)
+		:
+	;;
+	x86_64)
+		:
+	;;
+	*)
+		:
+	esac
 }
