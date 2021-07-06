@@ -17,10 +17,8 @@ Diy_Core() {
 Firmware-Diy() {
 	case "${TARGET_PROFILE}" in
 	d-team_newifi-d2)
-		:
-	;;
-	x86_64)
-		:
+		Copy CustomFiles/mac80211.sh package/kernel/mac80211/files/lib/wifi
+		Copy CustomFiles/system_${TARGET_PROFILE} package/base-files/files/etc/config system
 	;;
 	*)
 		:
