@@ -2,23 +2,23 @@
 # AutoBuild Module by Hyy2001 <https://github.com/Hyy2001X/AutoBuild-Actions>
 # AutoBuild Functions
 
-GET_INFO() {
+Firmware-Diy_Before() {
 	Diy_Core
 	Home="${GITHUB_WORKSPACE}/openwrt"
 	[[ -f ${GITHUB_WORKSPACE}/Openwrt.info ]] && source ${GITHUB_WORKSPACE}/Openwrt.info
 	[[ ${Short_Firmware_Date} == true ]] && Compile_Date="$(echo ${Compile_Date} | cut -c1-8)"
-	User_Repo="$(grep "https://github.com/[a-zA-Z0-9]" ${GITHUB_WORKSPACE}/.git/config | cut -c8-100 | sed 's/^[ \t]*//g')"
-	[[ -z ${Author} ]] && Author="$(echo "${User_Repo}" | cut -d "/" -f4)"
-	Openwrt_Maintainer="$(echo "${Openwrt_Repo}" | cut -d "/" -f4)"
-	Openwrt_Repo_Name="$(echo "${Openwrt_Repo}" | cut -d "/" -f5)"
-	Openwrt_Branch="$(GET_BRANCH)"
-	if [[ ${Openwrt_Branch} == master || ${Openwrt_Branch} == main ]];then
+	Author_Repository="$(grep "https://github.com/[a-zA-Z0-9]" ${GITHUB_WORKSPACE}/.git/config | cut -c8-100 | sed 's/^[ \t]*//g')"
+	[[ -z ${Author} ]] && Author="$(echo "${Author_Repository}" | cut -d "/" -f4)"
+	OP_Maintainer="$(echo "${Openwrt_Repository}" | cut -d "/" -f4)"
+	OP_REPO_NAME="$(echo "${Openwrt_Repository}" | cut -d "/" -f5)"
+	OP_BRANCH="$(Get_Branches)"
+	if [[ ${OP_BRANCH} == master || ${OP_BRANCH} == main ]];then
 		Openwrt_Version_Head="R$(date +%y.%m)-"
 	else
-		Openwrt_Branch="$(echo ${Openwrt_Branch} | egrep -o "[0-9]+.[0-9]+")"
-		Openwrt_Version_Head="R${Openwrt_Branch}-"
+		OP_BRANCH="$(echo ${OP_BRANCH} | egrep -o "[0-9]+.[0-9]+")"
+		Openwrt_Version_Head="R${OP_BRANCH}-"
 	fi
-	case "${Openwrt_Maintainer}" in
+	case "${OP_Maintainer}" in
 	coolsnowwolf)
 		Version_File=package/lean/default-settings/files/zzz-default-settings
 		zzz_Default_Version="$(egrep -o "R[0-9]+\.[0-9]+\.[0-9]+" ${Version_File})"
@@ -43,170 +43,109 @@ GET_INFO() {
 	} || {
 		TARGET_PROFILE="$(egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/')"
 	}
-	[[ -z ${TARGET_PROFILE} ]] && {
-		if [[ -n ${Default_TARGET_PROFILE} && ${Default_TARGET_PROFILE} != auto ]];then
-			TARGET_PROFILE="${Default_TARGET_PROFILE}"
-		else
-			TIME "[ERROR] Can not get TARGET_PROFILE,please check!"
-			exit 1
-		fi
-	}
-	[[ ${TARGET_PROFILE} == x86_64 ]] && {
-		[[ $(cat ${Home}/.config) =~ CONFIG_TARGET_IMAGES_GZIP=y ]] && Firmware_Type=img.gz || Firmware_Type=img 
-	}
+	[[ -z ${TARGET_PROFILE} ]] && TIME "Unable to obtain the [TARGET_PROFILE] !"
 	TARGET_BOARD="$(awk -F '[="]+' '/TARGET_BOARD/{print $2}' .config)"
+	TARGET_SUBTARGET="$(awk -F '[="]+' '/TARGET_SUBTARGET/{print $2}' .config)"
 	case "${TARGET_BOARD}" in
-	ramips | reltek | ipq40xx | ath79)
+	ramips | reltek | ipq40xx | ath79 | ipq807x)
 		Firmware_Type=bin
 	;;
-	rockchip)
-		Firmware_Type=img.gz
+	rockchip | x86)
+		[[ $(cat ${Home}/.config) =~ CONFIG_TARGET_IMAGES_GZIP=y ]] && {
+			Firmware_Type=img.gz || Firmware_Type=img
+		}
 	;;
 	esac
-	TARGET_SUBTARGET="$(awk -F '[="]+' '/TARGET_SUBTARGET/{print $2}' .config)"
-
-	case "${Openwrt_Maintainer}" in
-	immortalwrt)
-		Firmware_Head=immortalwrt
+	case "${TARGET_BOARD}" in
+	x86)
+		AutoBuild_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-${CURRENT_Version}-${FW_Boot_Type}-$(Get_sha256 $1).${Firmware_Type_Defined}'
+		Egrep_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-${x86_Boot}.[0-9a-z]+.${Firmware_Type}'
 	;;
 	*)
-		Firmware_Head=openwrt
+		AutoBuild_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-${CURRENT_Version}-$(Get_sha256 $1).${Firmware_Type_Defined}'
+		Egrep_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-[0-9a-z]+.${Firmware_Type}'
 	;;
 	esac
-	case "${Openwrt_Branch}" in
-	19.07 | 18.06)
-		case "${Openwrt_Maintainer}" in
-		immortalwrt)
-			Legacy_Tail=combined-squashfs
-			UEFI_Tail=uefi-gpt-squashfs
-		;;
-		*)
-			Legacy_Tail=combined-squashfs
-			UEFI_Tail=combined-squashfs-efi
-		;;
-		esac
-	;;
-	*)
-		Legacy_Tail=generic-squashfs-combined
-		UEFI_Tail=generic-squashfs-combined-efi
-	;;
-	esac
-
-	case "${TARGET_PROFILE}" in
-	x86_64)
-		Default_Legacy_Firmware="${Firmware_Head}-${TARGET_BOARD}-${TARGET_SUBTARGET}-${Legacy_Tail}.${Firmware_Type}"
-		Default_UEFI_Firmware="${Firmware_Head}-${TARGET_BOARD}-${TARGET_SUBTARGET}-${UEFI_Tail}.${Firmware_Type}"
-		AutoBuild_Firmware='AutoBuild-${Openwrt_Repo_Name}-${TARGET_PROFILE}-${CURRENT_Version}-${x86_64_Boot}-${SHA5BIT}.${Firmware_Type}'
-		Egrep_Firmware='AutoBuild-${Openwrt_Repo_Name}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-${x86_64_Boot}.[0-9a-z]+.${Firmware_Type}'
-	;;
-	*)
-		case "${TARGET_SUBTARGET}" in
-		generic)
-			Default_Firmware="${Firmware_Head}-${TARGET_BOARD}-${TARGET_PROFILE}-squashfs-sysupgrade.${Firmware_Type}"
-		;;
-		*)
-			Default_Firmware="${Firmware_Head}-${TARGET_BOARD}-${TARGET_SUBTARGET}-${TARGET_PROFILE}-squashfs-sysupgrade.${Firmware_Type}"
-		;;
-		esac
-		
-		AutoBuild_Firmware='AutoBuild-${Openwrt_Repo_Name}-${TARGET_PROFILE}-${CURRENT_Version}-${SHA5BIT}.${Firmware_Type}'
-		Egrep_Firmware='AutoBuild-${Openwrt_Repo_Name}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-[0-9a-z]+.${Firmware_Type}'
-	;;
-	esac
-	Firmware_Path="bin/targets/${TARGET_BOARD}/${TARGET_SUBTARGET}"
-
-	cat >> VARIABLE_FILE_Main <<EOF
+	cat >> VARIABLE_Main <<EOF
 Author=${Author}
-Github=${User_Repo}
+Github=${Author_Repository}
 TARGET_PROFILE=${TARGET_PROFILE}
 TARGET_BOARD=${TARGET_BOARD}
 TARGET_SUBTARGET=${TARGET_SUBTARGET}
 Firmware_Type=${Firmware_Type}
 CURRENT_Version=${CURRENT_Version}
-Openwrt_Maintainer=${Openwrt_Maintainer}
-Openwrt_Branch=${Openwrt_Branch}
-AutoBuild_Firmware=${AutoBuild_Firmware}
-Openwrt_Repo_Name=${Openwrt_Repo_Name}
+OP_Maintainer=${OP_Maintainer}
+OP_BRANCH=${OP_BRANCH}
+OP_REPO_NAME=${OP_REPO_NAME}
 Egrep_Firmware=${Egrep_Firmware}
 EOF
-	cat >> VARIABLE_FILE_Sec <<EOF
-INCLUDE_Obsolete_PKG_Compatible=${INCLUDE_Obsolete_PKG_Compatible}
+	cat >> VARIABLE_FILE <<EOF
 Home=${Home}
-Firmware_Path=${Firmware_Path}
+PKG_Compatible=${INCLUDE_Obsolete_PKG_Compatible}
+Checkout_Virtual_Images=${Checkout_Virtual_Images}
+Firmware_Path=${Home}/bin/targets/${TARGET_BOARD}/${TARGET_SUBTARGET}
+AutoBuild_Firmware=${AutoBuild_Firmware}
 EOF
-
-	case "${TARGET_PROFILE}" in
-	x86_64)
-		cat >> VARIABLE_FILE_Sec <<EOF
-Default_Legacy_Firmware=${Default_Legacy_Firmware}
-Default_UEFI_Firmware=${Default_UEFI_Firmware}
-Legacy_Tail=${Legacy_Tail}
-UEFI_Tail=${UEFI_Tail}
-EOF
-	;;
-	*)
-		cat >> VARIABLE_FILE_Sec <<EOF
-Default_Firmware=${Default_Firmware}
-EOF
-	;;
-	esac
-	echo "$(cat VARIABLE_FILE_Main)" >> VARIABLE_FILE_Sec
-	echo -e "### Variable list ###\n$(cat VARIABLE_FILE_Sec)\n"
-	TIME "[Load variable info] All done !"
+	echo "$(cat VARIABLE_Main)" >> VARIABLE_FILE
+	echo -e "### SYS-VARIABLE LIST ###\n$(cat VARIABLE_FILE)\n"
 }
 
-Firmware-Diy_Base() {
-	GET_INFO
+Firmware-Diy_Main() {
+	Firmware-Diy_Before
 	mkdir -p package/base-files/files/etc/AutoBuild
-	[ -f VARIABLE_FILE_Main ] && cp VARIABLE_FILE_Main package/base-files/files/etc/AutoBuild/Default_Variable
+	[ -f VARIABLE_Main ] && cp VARIABLE_Main package/base-files/files/etc/AutoBuild/Default_Variable
 	Copy CustomFiles/Depends/Custom_Variable package/base-files/files/etc/AutoBuild
-	[[ ! "$(cat ${GITHUB_WORKSPACE}/Configs/${TARGET_PROFILE})" =~ "## DO NOT MERGE" ]] && AddPackage_List ${GITHUB_WORKSPACE}/CustomPackages/Common
-	AddPackage_List ${GITHUB_WORKSPACE}/CustomPackages/${TARGET_PROFILE}
 	chmod +x -R ${GITHUB_WORKSPACE}/Scripts
 	chmod 777 -R ${GITHUB_WORKSPACE}/CustomFiles
-	chmod 777 -R ${GITHUB_WORKSPACE}/CustomPackages
+	[[ ${Load_CustomPackages_List} == true ]] && {
+		bash -n ${GITHUB_WORKSPACE}/Scripts/AutoBuild_ExtraPackages.sh
+		[[ ! $? == 0 ]] && TIME "AutoBuild_ExtraPackages.sh syntax error,skip ..." || {
+			. ${GITHUB_WORKSPACE}/Scripts/AutoBuild_ExtraPackages.sh
+		}
+	}
 	[[ ${INCLUDE_AutoBuild_Features} == true ]] && {
 		Copy Scripts/AutoBuild_Tools.sh package/base-files/files/bin
-		AddPackage git lean luci-app-autoupdate Hyy2001X main
 		Copy Scripts/AutoUpdate.sh package/base-files/files/bin
+		AddPackage git lean luci-app-autoupdate Hyy2001X main
 	}
 	[[ ${INCLUDE_Argon} == true ]] && {
-		case "${Openwrt_Maintainer}" in
-		coolsnowwolf)
+		case "${OP_Maintainer},${OP_BRANCH}" in
+		coolsnowwolf,master)
 			AddPackage git lean luci-theme-argon jerrykuku 18.06
 		;;
+		[Ll]ienol,main)
+			AddPackage git other luci-theme-argon jerrykuku master
+		;;
+		[Ll]ienol,19.07)
+			AddPackage git other luci-theme-argon jerrykuku v2.2.5
+		;;
 		*)
-			case "${Openwrt_Branch}" in
-			19.07)
-				AddPackage git other luci-theme-argon jerrykuku v2.2.5
-			;;
-			21.02)
-				AddPackage git other luci-theme-argon jerrykuku master
-			;;
-			18.06)
-				AddPackage git other luci-theme-argon jerrykuku 18.06
-			;;
-			*)
-				TIME "[ERROR] Unknown Openwrt branch: [${Openwrt_Branch}] !"
-			;;
-			esac
+			[[ ${OP_Maintainer} != immortalwrt ]] && {
+				case "${OP_BRANCH}" in
+				19.07)
+					AddPackage git other luci-theme-argon jerrykuku v2.2.5
+				;;
+				21.02)
+					AddPackage git other luci-theme-argon jerrykuku master
+				;;
+				18.06)
+					AddPackage git other luci-theme-argon jerrykuku 18.06
+				;;
+				esac
+			} || :
 		;;
 		esac
 		AddPackage git other luci-app-argon-config jerrykuku
 	}
-	[[ -n ${Defined_IP_Address} ]] && Default_LAN_IP="${Defined_IP_Address}"
-	[[ -n ${Default_LAN_IP} && ${Default_LAN_IP} != false ]] && {
-		if [[ ${Default_LAN_IP} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]];then
-			Old_IP_Address=$(awk -F '[="]+' '/ipaddr:-/{print $3}' package/base-files/files/bin/config_generate | awk 'NR==1')
-			if [[ ! ${Default_LAN_IP} == ${Old_IP_Address} ]];then
-				TIME "Setting default IP Address to ${Default_LAN_IP} ..."
-				sed -i "s/${Old_IP_Address}/${Default_LAN_IP}/g" package/base-files/files/bin/config_generate
-			fi
-		else
-			TIME "[ERROR] ${Default_LAN_IP} is not an IP Address !"
+	[[ -n ${Before_IP_Address} ]] && Default_LAN_IP="${Before_IP_Address}"
+	[[ -n ${Default_LAN_IP} && ${Default_LAN_IP} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && {
+		Old_IP_Address=$(awk -F '[="]+' '/ipaddr:-/{print $3}' package/base-files/files/bin/config_generate | awk 'NR==1')
+		if [[ ! ${Default_LAN_IP} == ${Old_IP_Address} ]];then
+			TIME "Setting default IP Address to ${Default_LAN_IP} ..."
+			sed -i "s/${Old_IP_Address}/${Default_LAN_IP}/g" package/base-files/files/bin/config_generate
 		fi
 	}
-	[[ ${INCLUDE_DRM_I915} == true && ${TARGET_PROFILE} == x86_64 ]] && {
+	[[ ${INCLUDE_DRM_I915} == true && ${TARGET_BOARD} == x86 ]] && {
 		Copy CustomFiles/Depends/DRM-I915 target/linux/x86
 		for X in $(ls -1 target/linux/x86 | grep "config-"); do echo -e "\n$(cat target/linux/x86/DRM-I915)" >> target/linux/x86/${X}; done
 	}
@@ -215,7 +154,7 @@ Firmware-Diy_Base() {
 	} || AutoUpdate_Version=OFF
 	Copy CustomFiles/Depends/profile package/base-files/files/etc
 	Copy CustomFiles/Depends/base-files-essential package/base-files/files/lib/upgrade/keep.d
-	case "${Openwrt_Maintainer}" in
+	case "${OP_Maintainer}" in
 	coolsnowwolf)
 		sed -i "/dns_caching_dns/d" $(PKG_Finder d package luci-app-turboacc)/root/etc/config/turboacc
 		echo "	option dns_caching_dns '223.5.5.5,114.114.114.114'" >> $(PKG_Finder d package luci-app-turboacc)/root/etc/config/turboacc
@@ -229,12 +168,12 @@ Firmware-Diy_Base() {
 	immortalwrt)
 		sed -i "/dns_caching_dns/d" $(PKG_Finder d "package feeds" luci-app-turboacc)/root/etc/config/turboacc
 		echo "	option dns_caching_dns '223.5.5.5,114.114.114.114'" >> $(PKG_Finder d "package feeds" luci-app-turboacc)/root/etc/config/turboacc
-		Copy CustomFiles/Depends/openwrt_release_${Openwrt_Maintainer} package/base-files/files/etc openwrt_release
+		Copy CustomFiles/Depends/openwrt_release_${OP_Maintainer} package/base-files/files/etc openwrt_release
 		Copy CustomFiles/Depends/cpuinfo_x86 $(PKG_Finder d package autocore | awk 'NR==1')/files/x86/sbin cpuinfo
 		sed -i "s?ImmortalWrt?ImmortalWrt @ ${Author} [${Display_Date}]?g" ${Version_File}
 	;;
 	esac
-	case "${Openwrt_Maintainer}" in
+	case "${OP_Maintainer}" in
 	immortalwrt)
 		Copy CustomFiles/Depends/banner $(PKG_Finder d package default-settings)/files openwrt_banner
 		sed -i "s?By?By ${Author}?g" $(PKG_Finder d package default-settings)/files/openwrt_banner
@@ -246,118 +185,143 @@ Firmware-Diy_Base() {
 		sed -i "s?Openwrt?Openwrt ${CURRENT_Version} / AutoUpdate ${AutoUpdate_Version}?g" package/base-files/files/etc/banner
 	;;
 	esac
-	TIME "[Firmware-Diy_Base] All done !"
+	TIME "[Firmware-Diy_Main] All done !"
 }
 
-Other_Scripts() {
-	source ./VARIABLE_FILE_Sec
-	case "${INCLUDE_Obsolete_PKG_Compatible}" in
+Firmware-Diy_Other() {
+	source ./VARIABLE_FILE
+	case "${PKG_Compatible}" in
 	19.07)
-		Openwrt_Branch=19.07
+		OP_BRANCH=19.07
 		Force_mode=1
-		INCLUDE_Obsolete_PKG_Compatible=true
+		PKG_Compatible=true
 	;;
 	21.02)
-		Openwrt_Branch=21.02
+		OP_BRANCH=21.02
 		Force_mode=1
-		INCLUDE_Obsolete_PKG_Compatible=true
+		PKG_Compatible=true
 	;;
 	esac
-	if [[ ${INCLUDE_Obsolete_PKG_Compatible} == true ]];then
-		TIME "Start to run Obsolete_Package_Compatible Scripts ..."
-		if [[ ${Openwrt_Maintainer} == openwrt || ${Force_mode} == 1 ]];then
-			case "${Openwrt_Branch}" in
-			19.07 | 21.02)
-				Copy CustomFiles/Patches/0003-upx-ucl-${Openwrt_Branch}.patch ./
-				cat 0003-upx-ucl-${Openwrt_Branch}.patch | patch -p1 > /dev/null 2>&1
+	if [[ ${PKG_Compatible} == true ]];then
+		if [[ ${OP_Maintainer} == openwrt || ${OP_Maintainer} == [Ll]ienol || ${Force_mode} == 1 ]];then
+			TIME "Starting to run Obsolete_Package_Compatible Scripts ..."
+			case "${OP_BRANCH}" in
+			19.07 | 21.02 | main)
+				[[ ${OP_BRANCH} == main ]] && OP_BRANCH=21.02
+				Copy CustomFiles/Patches/0003-upx-ucl-${OP_BRANCH}.patch ./
+				cat 0003-upx-ucl-${OP_BRANCH}.patch | patch -p1 > /dev/null 2>&1
 				# AddPackage svn feeds/packages golang coolsnowwolf/packages/trunk/lang
-				TIME "Start to convert zh-cn translation files to zh_Hans ..."
+				TIME "Starting to convert zh-cn translation files to zh_Hans ..."
 				Copy Scripts/Convert_Translation.sh package
 				cd ./package && bash ./Convert_Translation.sh && cd ..
 			;;
 			*)
-				TIME "Current branch: [${Openwrt_Branch}] is not supported,skip..."
+				TIME "Current branch: [${OP_BRANCH}] is not supported,skip..."
 			;;
 			esac
 		else
-			TIME "Current source: [${Openwrt_Maintainer}] is not supported,skip..."
+			TIME "Current source: [${OP_Maintainer}] is not supported,skip..."
 		fi
 	fi
 	if [[ -s $GITHUB_WORKSPACE/Configs/Common ]];then
 		[[ ! "$(cat .config)" =~ "## DO NOT MERGE" ]] && {
 			TIME "Merging [Configs/Common] to .config ..."
-			cat $GITHUB_WORKSPACE/Configs/Common >> .config
+			echo -e "\n$(cat $GITHUB_WORKSPACE/Configs/Common)" >> .config
 		} || {
-			TIME "Skip merge [Configs/Common] ..."
 			sed -i '/## DO NOT MERGE/d' .config >/dev/null 2>&1
 		}
 	fi
 }
 
-PS_Firmware() {
-	source ./VARIABLE_FILE_Sec
+Firmware-Diy_End() {
+	source ./VARIABLE_FILE
 	mkdir -p bin/Firmware
+	sha256sums="${Firmware_Path}/sha256sums"
 	cd ${Firmware_Path}
-	echo -e "### Firmware Output ###\n$(ls -1)\n"
-	case "${TARGET_PROFILE}" in
-	x86_64)
-		[[ -f ${Default_Legacy_Firmware} ]] && {
-			cp ${Default_Legacy_Firmware} $(EVAL_FW x86_64 Legacy ${Home}/VARIABLE_FILE_Sec)
-			TIME "Legacy Firmware: [${Default_Legacy_Firmware}] is detected !"
-		}
-		[[ -f ${Default_UEFI_Firmware} ]] && {
-			cp ${Default_UEFI_Firmware} $(EVAL_FW x86_64 UEFI ${Home}/VARIABLE_FILE_Sec)
-			TIME "UEFI Firmware: [${Default_UEFI_Firmware}] is detected !"
+	echo -e "### FIRMWARE OUTPUT ###\n$(ls -1 | egrep -v "packages|buildinfo|sha256sums|manifest")\n"
+	case "${TARGET_BOARD}" in
+	x86)
+		[[ ${Checkout_Virtual_Images} == true ]] && {
+			Eval_Firmware $(List_Format)
+		} || {
+			Eval_Firmware ${Firmware_Type}
 		}
 	;;
 	*)
-		[[ -f ${Default_Firmware} ]] && {
-			cp ${Default_Firmware} $(EVAL_FW common ${Home}/VARIABLE_FILE_Sec)
-			TIME "Firmware: [${Default_Firmware}] is detected !"
-		} || {
-			TIME "Firmware is not detected !"
-			Error_Output=1
-		}
+		Eval_Firmware ${Firmware_Type}
 	;;
 	esac
-	[[ ${Error_Output} != 1 ]] && mv -f AutoBuild-* ${Home}/bin/Firmware
+	[[ $(ls) =~ AutoBuild ]] && mv -f AutoBuild-* ${Home}/bin/Firmware
 	cd ${Home}
 	echo "[$(date "+%H:%M:%S")] Actions Avaliable: $(df -h | grep "/dev/root" | awk '{printf $4}')"
 }
 
-EVAL_FW() {
-	case "$1" in
-	x86_64)
-		x86_64_Boot=$2
-		SHA5BIT=$(GET_SHA5BIT $(GET_VARIABLE Default_$2_Firmware= $3) 5)
-		EVAL_VARIABLE $(GET_VARIABLE AutoBuild_Firmware= $3)
-	;;
-	common)
-		SHA5BIT=$(GET_SHA5BIT $(GET_VARIABLE Default_Firmware= $2) 5)
-		EVAL_VARIABLE $(GET_VARIABLE AutoBuild_Firmware= $2)
-	;;
-	esac
+Eval_Firmware() {
+	while [[ $1 ]];do
+		Eval_Firmware_Core $1 $(List_Firmware $1)
+		shift
+	done
 }
 
-EVAL_VARIABLE() {
-	eval OUTPUT=$1
-	echo "${OUTPUT}"
+Eval_Firmware_Core() {
+	Firmware_Type_Defined=$1
+	shift
+	while [[ $1 ]];do
+		case "${TARGET_BOARD}" in
+		x86)
+			[[ $1 =~ efi ]] && {
+				FW_Boot_Type=UEFI
+			} || {
+				FW_Boot_Type=Legacy
+			}
+		;;
+		esac
+		eval AutoBuild_Firmware=$(Get_Variable AutoBuild_Firmware=)
+		[[ -f $1 ]] && {
+			TIME "Copying [$1] to [${AutoBuild_Firmware}] ..."
+			cp -a $1 ${AutoBuild_Firmware}
+		} || TIME "Unable to access [${AutoBuild_Firmware}] ..."
+		shift
+	done
 }
 
-GET_SHA5BIT() {
-	grep "$1" sha256sums | cut -c1-$2
+List_Firmware() {
+	[[ -z $* ]] && {
+		List_All | while read X;do
+			echo $X | cut -d "*" -f2
+		done
+	} || {
+		while [[ $1 ]];do
+			for X in $(echo $(List_All));do
+				[[ $X == *$1 ]] && echo "$X" | cut -d "*" -f2
+			done
+			shift
+		done
+	}
 }
 
-GET_BRANCH() {
+List_Format() {
+	echo "$(List_All | cut -d "*" -f2 | cut -d "." -f2-3)" | sort | uniq
+}
+
+List_All() {
+	egrep -v "packages|buildinfo|sha256sums|manifest|kernel|rootfs|factory" ${sha256sums} | tr -s '\n'
+}
+
+Get_sha256() {
+	List_All | grep "$1" | cut -c1-5
+}
+
+Get_Variable() {
+	grep "$1" ${Home}/VARIABLE_FILE | cut -c$(echo $1 | wc -c)-200 | cut -d ":" -f2
+}
+
+Get_Branches() {
     Folder="$(pwd)"
     [[ -n $1 ]] && Folder="$1"
     git -C "${Folder}" rev-parse --abbrev-ref HEAD | grep -v HEAD || \
     git -C "${Folder}" describe --exact-match HEAD || \
     git -C "${Folder}" rev-parse HEAD
-}
-
-GET_VARIABLE() {
-	echo -e "$(grep "$1" $2 | cut -c$(echo $1 | wc -c)-200 | cut -d ":" -f2)"
 }
 
 TIME() {
@@ -374,34 +338,30 @@ PKG_Finder() {
 	[[ -n ${Result} ]] && echo "${Result}"
 }
 
-AddPackage_List() {
-	[[ $# != 1 ]] && {
-		TIME "[ERROR] Error options: [$#] [$*] !"
-		return 0
-	}
-	echo "" >> $1
-	[[ -s $1 ]] && {
-		TIME "Loading Custom Packages list: [$1]..."
-		cat $1 | sed '/^$/d' | while read X;do
-			[[ -n ${X} && ! $* =~ '#' ]] && AddPackage ${X}
-		done
-	}
-}
-
 AddPackage() {
 	[[ $# -lt 4 ]] && {
-		TIME "[ERROR] Error options: [$#] [$*] !"
+		TIME "Syntax error: [$#] [$*] !"
 		return 0
 	}
-	[[ $* =~ "#" ]] && return 0
-	PKG_PROTO="$1"
-	PKG_DIR="$2"
-	PKG_NAME="$3"
+	PKG_PROTO=$1
+	case "${PKG_PROTO}" in
+	git | svn)
+		:
+	;;
+	*)
+		TIME "Unknown type: ${PKG_PROTO}"
+	;;
+	esac
+	PKG_DIR=$2
+	PKG_NAME=$3
 	REPO_URL="https://github.com/$4"
-	[[ -z $5 ]] && REPO_BRANCH=master || REPO_BRANCH="$5"
-	[[ ${REPO_URL} =~ "${Openwrt_Maintainer}/${Openwrt_Repo_Name}" ]] && return 0
+	REPO_BRANCH=$5
+	[[ ${REPO_URL} =~ "${OP_Maintainer}/${OP_REPO_NAME}" ]] && return 0
 
-	mkdir -p package/${PKG_DIR}
+	mkdir -p package/${PKG_DIR} || {
+		TIME "Can't create download dir: [package/${PKG_DIR}]"
+		return 0
+	}
 	[[ -d package/${PKG_DIR}/${PKG_NAME} ]] && {
 		TIME "Removing old package: [${PKG_NAME}] ..."
 		rm -rf package/${PKG_DIR}/${PKG_NAME}
@@ -409,7 +369,10 @@ AddPackage() {
 	TIME "Checking out package [${PKG_NAME}] to package/${PKG_DIR} ..."
 	case "${PKG_PROTO}" in
 	git)
-		
+		[[ -z ${REPO_BRANCH} ]] && {
+			TIME "WARNING: Missing <branch> ,using default branch: [master]"
+			REPO_BRANCH=master
+		}
 		PKG_URL="$(echo ${REPO_URL}/${PKG_NAME} | sed s/[[:space:]]//g)"
 		git clone -b ${REPO_BRANCH} ${PKG_URL} ${PKG_NAME} > /dev/null 2>&1
 	;;
@@ -419,19 +382,19 @@ AddPackage() {
 	esac
 	[[ -f ${PKG_NAME}/Makefile || -n $(ls -A ${PKG_NAME}) ]] && {
 		mv -f "${PKG_NAME}" "package/${PKG_DIR}"
-	}
+	} || TIME "Package: ${PKG_NAME} failed to download"
 }
 
 Copy() {
 	[[ $# -lt 2 ]] && {
-		TIME "[ERROR] Error options: [$#] [$*] !"
+		TIME "Error options: [$#] [$*] !"
 		return 0
 	}
 	[[ ! -f ${GITHUB_WORKSPACE}/$1 ]] && [[ ! -d ${GITHUB_WORKSPACE}/$1 ]] && {
-		TIME "CustomFiles/$1 is not detected !"
+		TIME "Unable to access CustomFiles/$1,skip ..."
 		return 0
 	}
-	[[ ! -d ${GITHUB_WORKSPACE}/openwrt/$2 ]] && mkdir -p ${GITHUB_WORKSPACE}/openwrt/$2
+	[[ ! -d ${GITHUB_WORKSPACE}/openwrt/$2 ]] && mkdir -p "${GITHUB_WORKSPACE}/openwrt/$2"
 	[[ -n $3 ]] && RENAME="$3" || RENAME=""
 	TIME "Copying $1 to $2 ${RENAME} ..."
 	cp -a "${GITHUB_WORKSPACE}/$1" "${GITHUB_WORKSPACE}/openwrt/$2/${RENAME}"

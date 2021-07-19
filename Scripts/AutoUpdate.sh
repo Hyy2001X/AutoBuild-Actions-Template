@@ -4,42 +4,43 @@
 # Depends on: bash wget-ssl/wget/uclient-fetch curl x86:gzip openssl
 
 TITLE() {
-	clear && echo "Openwrt-AutoUpdate Script by Hyy2001 ${Version}"
+	clear && echo "Openwrt-AutoUpdate Script by Hyy2001 ${Version} [${DL}]"
 }
 
 SHELL_HELP() {
 	TITLE
+	echo -e "\n当前指令:	${Run_Command}"
 	cat <<EOF
 
-使用方法:	$0 [<path=>] [-P] [-n] [-f] [-u]
-		$0 [<更新脚本>] [-x/-x path=<>/-x url=<>]
+使用方法:	$0 [-n] [-f] [-u] [-F] [-P] [path=<Path>] 
+		$0 [-x] [path=<Path>] [url=<URL>]
 
 更新固件:
-	-n		更新固件 [不保留配置]
-	-f		跳过版本号验证,并强制刷写固件 [保留配置]
-	-u		适用于定时更新 LUCI 的参数 [保留配置]
-	-F		强制刷写固件
-	--skip		跳过固件 SHA256 比对校验 (危险)
-	path=<Path>	更新固件 (保存固件到提供的绝对路径 <Path>)
+	-n		不保留配置更新固件 *
+	-f		跳过版本号、SHA256验证,并强制刷写固件 (危险) *
+	-u		适用于定时更新 LUCI 的参数 *
+	-F		强制刷写固件 *
+	-P		优先开启镜像加速下载固件 *
+	--skip		跳过云端固件 SHA256 校验 (危险) *
+	path=<Path>	保存固件到提供的绝对路径 <Path> *
 
 更新脚本:
-	-x		更新 AutoUpdate.sh 脚本
-	-x path=<Path>	更新 AutoUpdate.sh 脚本 (保存脚本到提供的路径 <Path>)
-	-x url=<URL>	更新 AutoUpdate.sh 脚本 (使用提供的地址 <URL> 更新脚本)
+	-x			更新 AutoUpdate.sh 脚本
+	-x path=<Path>		更新 AutoUpdate.sh 脚本 (保存脚本到提供的绝对路径 <Path>) *
+	-x url=<URL>		更新 AutoUpdate.sh 脚本 (使用提供的地址 <URL> 更新脚本) *
 
 其他参数:
-	-P,--proxy		优先使用镜像加速
 	-C <Github URL>		更改 Github 地址为提供的 <Github URL>
-	-B <UEFI | Legacy>	指定 x86_64 设备下载 <UEFI | Legacy> 引导的固件 (危险)
+	-B <UEFI | Legacy>	指定 x86 设备下载 <UEFI | Legacy> 引导的固件 (危险)
 	-V < | cloud>		打印 <当前 | 云端> AutoUpdate.sh 版本号
-	-E <local | cloud | *>	打印 <当前 | 云端 | 指定版本> 版本的固件更新日志
+	-E < | cloud | *>	打印 <当前 | 云端 | 指定版本> 版本的固件更新日志
 	-H,--help		打印 AutoUpdate 帮助信息
 	-L,--list		打印当前系统信息
 	-Q < | cloud>		打印 <当前 | 云端> 固件版本
-	-U			检查固件版本更新并获取更新日志
 	--bak <Path> <Name>	备份当前系统配置文件到指定的 <Path> 路径及名称 <Name>
 	--clean			清理 AutoUpdate 缓存
 	--check			检查 AutoUpdate 依赖软件包
+	--verbose		打印更详细的下载信息
 	--var <Variable>	打印用户指定的变量 <Variable>
 	--var-rm <Variable>	删除用户指定的变量 <Variable>
 	--env < | 1 | 2>	打印 AutoUpdate 环境变量 <全部 | 变量名称 | 值>
@@ -57,23 +58,20 @@ SHOW_VARIABLE() {
 
 设备名称:		$(uname -n) / ${TARGET_PROFILE}
 固件版本:		${CURRENT_Version}
+其他参数:		${TARGET_BOARD} / ${TARGET_SUBTARGET}
 固件作者:		${Author}
-软件架构:		${TARGET_SUBTARGET}
-作者仓库:		${Github}
-OpenWrt 源码:		https://github.com/${Openwrt_Maintainer}/${Openwrt_Repo_Name}:${Openwrt_Branch}	
-Release API:		${Github_API}
-固件格式-框架:		$(GET_VARIABLE AutoBuild_Firmware ${Default_Variable})
-固件名称-框架:		$(GET_VARIABLE Egrep_Firmware ${Default_Variable})
-固件格式:		${Firmware_Type}
+固件作者 URL:		${Github}
 Release URL:		${Github_Release_URL}
-FastGit URL:		${Release_FastGit_URL}
-Github Proxy URL:	${Release_Goproxy_URL}
-固件保存位置:		${AutoUpdate_Path}
-运行日志:		${AutoUpdate_Log_Path}/AutoUpdate.log
+Release API:		${Github_API}
+OpenWrt 源码 URL:	https://github.com/${OP_Maintainer}/${OP_REPO_NAME}:${OP_BRANCH}	
+固件匹配框架:		$(GET_VARIABLE Egrep_Firmware ${Default_Variable})
+固件格式:		${Firmware_Type}
+固件保存路径:		${AutoUpdate_Path}
+运行日志路径:		${AutoUpdate_Log_Path}/AutoUpdate.log
 Downloader:		${Downloader}
 EOF
-	[[ ${TARGET_PROFILE} == x86_64 ]] && {
-		echo "x86_64 引导模式:	${x86_64_Boot}"
+	[[ ${TARGET_BOARD} == x86 ]] && {
+		echo "x86 固件引导模式:	${x86_Boot}"
 	}
 	EXIT 0
 }
@@ -106,12 +104,12 @@ LIST_ENV() {
 	local X
 	cat /etc/AutoBuild/*_Variable | grep -v '#' | while read X;do
 	[[ ${X} =~ "=" ]] && {
-		case $1 in
+		case "$1" in
 		1 | 2)
-			[[ -n $(echo ${X} | cut -d "=" -f1) ]] && echo ${X} | cut -d "=" -f$1
+			[[ -n $(echo "${X}" | cut -d "=" -f1) ]] && echo "${X}" | cut -d "=" -f$1
 		;;
 		0)
-			echo ${X}
+			echo "${X}"
 		;;
 		esac
 	}
@@ -119,9 +117,8 @@ LIST_ENV() {
 }
 
 EXIT() {
-	local RUN_TYPE
 	LOGGER "Command :[${Run_Command}] Finished $1"
-	exit 0
+	exit
 }
 
 ECHO() {
@@ -129,7 +126,7 @@ ECHO() {
 	[[ -z $1 ]] && {
 		echo -ne "\n${Grey}[$(date "+%H:%M:%S")]${White} "
 	} || {
-	case $1 in
+	case "$1" in
 		r) Color="${Red}";;
 		g) Color="${Green}";;
 		b) Color="${Blue}";;
@@ -168,9 +165,10 @@ GET_SHA256SUM() {
 		ECHO r "未检测到文件: [$1] 或该文件为空,无法计算 SHA256 值!"
 		EXIT 1
 	}
+	LOGGER "[GET_SHA256SUM] Target File: $1"
 	local Result=$(sha256sum $1 | cut -c1-$2)
 	[[ -n ${Result} ]] && echo ${Result}
-	LOGGER "[GET_SHA256SUM] File [$1] Calculated result: ${Result}"
+	LOGGER "[GET_SHA256SUM] Calculated result: ${Result}"
 }
 
 GET_VARIABLE() {
@@ -198,18 +196,18 @@ LOAD_VARIABLE() {
 	Release_URL="https://github.com/${FW_Author}/releases/download/AutoUpdate"
 	Release_FastGit_URL="https://download.fastgit.org/${FW_Author}/releases/download/AutoUpdate"
 	Release_Goproxy_URL="https://ghproxy.com/${Release_URL}"
-	case ${TARGET_PROFILE} in
-	x86_64)
-		case ${Firmware_Type} in
+	case "${TARGET_BOARD}" in
+	x86)
+		case "${Firmware_Type}" in
 		img.gz | img)
-			[[ -z ${x86_64_Boot} ]] && {
+			[[ -z ${x86_Boot} ]] && {
 				[ -d /sys/firmware/efi ] && {
-					x86_64_Boot=UEFI
-				} || x86_64_Boot=Legacy
+					x86_Boot=UEFI
+				} || x86_Boot=Legacy
 			}
 		;;
 		*)
-			ECHO r "暂不支持当前固件格式!"
+			ECHO r "[${TARGET_PROFILE}] 设备暂不支持当前固件格式!"
 			EXIT 1
 		;;
 		esac
@@ -265,7 +263,7 @@ CHANGE_BOOT() {
 	[[ -z $1 ]] && SHELL_HELP
 	case "$1" in
 	UEFI | Legacy)
-		EDIT_VARIABLE edit ${Custom_Variable} x86_64_Boot $1
+		EDIT_VARIABLE edit ${Custom_Variable} x86_Boot $1
 		echo "ON" > /force_dump
 		ECHO r "警告: 更换引导方式后更新固件后可能导致设备无法正常启动!"
 		ECHO y "固件引导格式已指定为: [$1],AutoUpdate 将在下一次更新时执行强制刷写固件!"
@@ -280,11 +278,15 @@ CHANGE_BOOT() {
 
 UPDATE_SCRIPT() {
 	[[ $# != 2 ]] && SHELL_HELP
+	ECHO b "脚本下载地址: $2"
 	ECHO b "脚本保存路径: $1"
-	ECHO b "下载地址: $2"
+	[[ -f $1 ]] && {
+		ECHO r "AutoUpdate 脚本保存路径有误,请重新输入!"
+		EXIT 1
+	}
 	ECHO "开始更新 AutoUpdate 脚本,请耐心等待..."
 	[[ ! -d $1 ]] && mkdir -p $1
-	${Downloader} $2 -O /tmp/AutoUpdate.sh
+	${Downloader} /tmp/AutoUpdate.sh $2
 	if [[ $? == 0 && -s /tmp/AutoUpdate.sh ]];then
 		mv -f /tmp/AutoUpdate.sh $1
 		[[ ! $? == 0 ]] && ECHO r "AutoUpdate 脚本更新失败!" && EXIT 1
@@ -324,12 +326,12 @@ CHECK_DEPENDS() {
 }
 
 GET_FW_LOG() {
-	local FW_Version Update_Log
+	local Update_Log
 	case "$1" in
-	local)
+	[Ll]ocal)
 		FW_Version="${CURRENT_Version}"
 	;;
-	cloud)
+	[Cc]loud)
 		[[ -z ${CLOUD_Firmware_Version} ]] && GET_CLOUD_VERSION
 		FW_Version="${CLOUD_Firmware_Version}"
 	;;
@@ -338,28 +340,19 @@ GET_FW_LOG() {
 		FW_Version="$1"
 	;;
 	esac
-	${Downloader} ${Release_URL}/Update_Logs.json -O ${AutoUpdate_Path}/Update_Logs.json
+	${Downloader} ${AutoUpdate_Path}/Update_Logs.json ${Release_URL}/Update_Logs.json
 	[[ $? == 0 ]] && {
 		Update_Log=$(jsonfilter -e '@["'"""${TARGET_PROFILE}"""'"]["'"""${FW_Version}"""'"]' < ${AutoUpdate_Path}/Update_Logs.json)
 		rm -f ${AutoUpdate_Path}/Update_Logs.json
+		echo -e "\n${Grey}${FW_Version} for ${TARGET_PROFILE} 更新日志:"
+		echo -e "\n${Green}${Update_Log}${White}"
 	}
-	case "$2" in
-	show)
-		if [[ -n ${Update_Log} ]];then
-			echo -e "\n${Grey}${FW_Version} 更新日志:"
-			echo -e "\n${Green}${Update_Log}${White}\n"
-		else
-			ECHO r "未查询到版本: [${FW_Version}] 的日志信息!"
-		fi
-	;;
-	esac
 }
 
 GET_CLOUD_INFO() {
 	[[ -f ${AutoUpdate_Path}/Github_Tags ]] && rm -f ${AutoUpdate_Path}/Github_Tags
-	${Downloader} ${Github_API} -O ${AutoUpdate_Path}/Github_Tags
+	${Downloader} ${AutoUpdate_Path}/Github_Tags ${Github_API}
 	[[ $? != 0 || ! -s ${AutoUpdate_Path}/Github_Tags ]] && {
-		[[ $1 == check ]] && echo "获取失败" > /tmp/Cloud_Version
 		echo 0
 	} || echo 1
 }
@@ -377,7 +370,7 @@ GET_CLOUD_FW() {
 
 GET_CLOUD_VERSION() {
 	GET_CLOUD_FW
-	CLOUD_Firmware_Version=$(echo "${FW_Name}" | egrep -o "R[0-9].*20[0-9]+")
+	CLOUD_Firmware_Version=$(echo "${FW_Name}" | egrep -o "R[0-9].*202[1-2][0-9]+")
 	[[ -z ${CLOUD_Firmware_Version} ]] && ECHO "云端固件版本获取失败!" && EXIT 1
 }
 
@@ -395,11 +388,6 @@ CHECK_UPDATES() {
 		}
 	}
 	SHA5BIT=$(echo ${FW_Name} | egrep -o "[a-zA-Z0-9]+.${Firmware_Type}" | sed -r "s/(.*).${Firmware_Type}/\1/")
-	[[ $1 == check ]] && {
-		echo -e "\n当前固件版本: ${CURRENT_Version}${CURRENT_Type}"
-		echo -e "云端固件版本: ${CLOUD_Firmware_Version}${CLOUD_Type}"
-		GET_FW_LOG cloud show
-	} || GET_FW_LOG cloud
 }
 
 PREPARE_UPGRADES() {
@@ -413,7 +401,7 @@ PREPARE_UPGRADES() {
 			Test_Mode=1
 			Special_Commands="${Special_Commands} [测试模式]"
 		;;
-		-P | --proxy)
+		-P)
 			Proxy_Mode=1
 			Special_Commands="${Special_Commands} [镜像加速]"
 		;;
@@ -444,18 +432,23 @@ PREPARE_UPGRADES() {
 		path=/*)
 			[[ -z $(echo $1 | cut -d "=" -f2) ]] && ECHO r "固件保存路径不能为空!" && EXIT 1
 			AutoUpdate_Path=$(echo $1 | cut -d "=" -f2)
-			ECHO g "自定义固件保存路径: ${AutoUpdate_Path}"
+			ECHO g "使用自定义固件保存路径: ${AutoUpdate_Path}"
+		;;
+		--verbose)
+			Special_Commands="${Special_Commands} [详细信息]"
 		;;
 		*)
 			SHELL_HELP
 		esac
 	shift
 	done
+	LOGGER "Upgrade Options: ${Upgrade_Option}"
 	[[ -n "${Special_Commands}" ]] && ECHO g "特殊指令:${Special_Commands} / ${Upgrade_Option}"
 	ECHO g "执行: ${MSG}${Special_MSG}"
 	REMOVE_CACHE quiet
 	if [[ $(CHECK_PKG curl) == true && ${Proxy_Mode} != 1 ]];then
 		Google_Check=$(curl -I -s --connect-timeout 3 google.com -w %{http_code} | tail -n1)
+		LOGGER "Google_Check: ${Google_Check}"
 		[[ ${Google_Check} != 301 ]] && {
 			ECHO r "Google 连接失败,优先使用镜像加速!"
 			Proxy_Mode=1
@@ -473,7 +466,7 @@ PREPARE_UPGRADES() {
 
 固件作者: ${FW_Author%/*}
 设备名称: $(uname -n) / ${TARGET_PROFILE}
-$([[ ${TARGET_PROFILE} == x86_64 ]] && echo "固件格式: ${Firmware_Type} / ${x86_64_Boot}" || echo "固件格式: ${Firmware_Type}")
+$([[ ${TARGET_BOARD} == x86 ]] && echo "固件格式: ${Firmware_Type} / ${x86_Boot}" || echo "固件格式: ${Firmware_Type}")
 
 $(echo -e "当前固件版本: ${CURRENT_Version}${CURRENT_Type}")
 $(echo -e "云端固件版本: ${CLOUD_Firmware_Version}${CLOUD_Type}")
@@ -481,10 +474,7 @@ $(echo -e "云端固件版本: ${CLOUD_Firmware_Version}${CLOUD_Type}")
 云端固件名称: ${FW_Name}
 固件下载地址: ${FW_URL}
 EOF
-	if [[ -n ${Update_Log} ]];then
-		echo -e "\n${Grey}${CLOUD_Firmware_Version} 更新日志:"
-		echo -e "\n${Green}${Update_Log}${White}"
-	fi
+	GET_FW_LOG -v ${CLOUD_Firmware_Version}
 	rm -f ${AutoUpdate_Path}/Github_Tags
 	case "${Upgrade_Stopped}" in
 	1 | 2)
@@ -512,26 +502,26 @@ EOF
 			ECHO r "固件下载失败,请检查网络后重试!"
 			EXIT 1
 		else
-			${Downloader} "${FW_URL}/${FW_Name}" -O ${AutoUpdate_Path}/${FW_Name}
+			${Downloader} ${AutoUpdate_Path}/${FW_Name} "${FW_URL}/${FW_Name}"
 			[[ $? == 0 && -s ${AutoUpdate_Path}/${FW_Name} ]] && ECHO y "固件下载成功!" && break
 		fi
 		Retry_Times=$((${Retry_Times} - 1))
 		ECHO r "固件下载失败,剩余尝试次数: ${Retry_Times} 次"
 	done
-	if [[ ! ${Skip_SHA256} == 1 ]];then
+	if [[ ! ${Skip_SHA256} == 1 || ! Force_Mode == 1 ]];then
 		CURRENT_SHA256=$(GET_SHA256SUM ${AutoUpdate_Path}/${FW_Name} 5)
 		CLOUD_SHA256=$(echo ${FW_Name} | egrep -o "[0-9a-z]+.${Firmware_Type}" | sed -r "s/(.*).${Firmware_Type}/\1/")
 		[[ ${CURRENT_SHA256} != ${CLOUD_SHA256} ]] && {
 			ECHO r "本地固件 SHA256 与云端比对校验失败 [${CURRENT_SHA256}],请检查网络后重试!"
 			EXIT 1
-		}
+		} || LOGGER "固件 SHA256 比对通过!"
 	fi
 	case "${Firmware_Type}" in
 	img.gz)
 		ECHO "正在解压固件,请耐心等待 ..."
 		gzip -d -q -f -c ${AutoUpdate_Path}/${FW_Name} > ${AutoUpdate_Path}/$(echo ${FW_Name} | sed -r 's/(.*).gz/\1/')
 		[[ $? != 0 ]] && {
-			ECHO r "固件解压失败,请检查固件完整性或更换固件保存路径!"
+			ECHO r "固件解压失败,请检查网络稳定性或更换固件保存路径!"
 			EXIT 1
 		} || {
 			FW_Name="$(echo ${FW_Name} | sed -r 's/(.*).gz/\1/')"
@@ -540,21 +530,22 @@ EOF
 	;;
 	esac
 	[[ ${Test_Mode} != 1 ]] && {
-		sleep 3
 		chmod 777 ${AutoUpdate_Path}/${FW_Name}
 		DO_UPGRADE ${Upgrade_Option} ${AutoUpdate_Path}/${FW_Name}
 	} || {
-		ECHO x "[测试模式] 执行: ${Upgrade_Option} ${AutoUpdate_Path}/${FW_Name}"
+		ECHO x "[测试模式] ${Upgrade_Option} ${AutoUpdate_Path}/${FW_Name}"
+		ECHO x "[测试模式] 运行完毕!"
 		EXIT 0
 	}
 }
 
 DO_UPGRADE() {
-	ECHO g "正在更新固件,更新期间请耐心等待 ..."
-	sleep 3
+	ECHO r "准备更新固件,更新期间请不要断开电源或重启设备 ..."
+	sleep 5
+	ECHO g "正在更新固件,请耐心等待 ..."
 	$*
 	[[ $? -ne 0 ]] && {
-		ECHO r "固件刷写失败,请尝试手动更新固件!"
+		ECHO r "固件刷写失败,请尝试手动下载更新固件或附加 -F 参数强制刷写!"
 		EXIT 1
 	} || EXIT 0
 }
@@ -582,12 +573,30 @@ AutoUpdate_LOG() {
 		}
 	} || {
 		while [[ $1 ]];do
-			[[ ! $1 =~ path= && $1 != rm && $1 != del ]] && SHELL_HELP
+			case "$1" in
+			path=/* | rm | del)
+				:
+			;;
+			*)
+				SHELL_HELP
+			;;
+			esac
 			if [[ $1 =~ path= ]];then
 				LOG_PATH="$(echo $1 | cut -d "=" -f2)"
+				[[ ${LOG_PATH} == ${AutoUpdate_Log_Path} ]] && {
+					ECHO y "AutoUpdate 日志保存路径相同,无需修改!"
+					EXIT 0
+				}
+				[[ -f ${LOG_PATH} ]] && {
+					ECHO r "错误的参数: [${LOG_PATH}]"
+					ECHO r "AutoUpdate 日志保存路径有误,请重新输入!"
+					EXIT 1
+				}
 				EDIT_VARIABLE rm ${Custom_Variable} AutoUpdate_Log_Path
 				EDIT_VARIABLE edit ${Custom_Variable} AutoUpdate_Log_Path ${LOG_PATH}
 				[[ ! -d ${LOG_PATH} ]] && mkdir -p ${LOG_PATH}
+				[[ -f ${AutoUpdate_Log_Path}/AutoUpdate.log ]] && mv ${AutoUpdate_Log_Path}/AutoUpdate.log ${LOG_PATH}
+				AutoUpdate_Log_Path=${LOG_PATH}
 				ECHO y "AutoUpdate 日志保存路径已修改为: ${LOG_PATH}"
 				EXIT 0
 			fi
@@ -606,21 +615,28 @@ AutoUpdate_Main() {
 	[[ ! -d ${AutoUpdate_Path} ]] && mkdir -p ${AutoUpdate_Path}
 	
 	if [[ $(CHECK_PKG wget-ssl) == true ]];then
-		Downloader="wget-ssl -q --no-check-certificate -T 5 --no-dns-cache -x"
-	elif [[ $(CHECK_PKG wget) == true ]];then
-		Downloader="wget -q --no-check-certificate -T 5 --no-dns-cache -x"
+		Downloader="wget-ssl --quiet --no-check-certificate -T 5 --no-dns-cache -x -O"
+		DL="wget-ssl"
+	elif [[ $(CHECK_PKG curl) == true ]];then
+		Downloader="curl -L -k -m 5 --silent -o"
+		DL="curl"
 	else
-		Downloader="uclient-fetch -q --no-check-certificate -T 5"
+		Downloader="uclient-fetch --quiet --no-check-certificate -T 5 -O"
+		DL="uclient-fetch"
 	fi
 
 	[[ -z $* ]] && PREPARE_UPGRADES $*
-	[[ $1 =~ path= && ! $* =~ -x && ! $* =~ -U ]] && PREPARE_UPGRADES $*
+	[[ $1 =~ path=/ && ! $* =~ -x && ! $* =~ -U ]] && PREPARE_UPGRADES $*
 	[[ $1 =~ --skip ]] && PREPARE_UPGRADES $*
-	[[ $* =~ -T || $* =~ --test ]] && Downloader="$(echo ${Downloader} | sed -r 's/-q /\1/')"
+	[[ $* =~ -T || $* =~ --verbose ]] && {
+		Downloader="$(echo ${Downloader/ --quiet / })"
+		Downloader="$(echo ${Downloader/ --silent / })"
+	}
 
 	while [[ $1 ]];do
 		case "$1" in
-		-n | -f | -u | -T | --test | -P | --proxy | -F)
+		-n | -f | -u | -T | -P | -F | --verbose)
+			LOGGER "Downloader: ${DL} / ${Downloader}"
 			PREPARE_UPGRADES $*
 		;;
 		--bak)
@@ -651,13 +667,13 @@ AutoUpdate_Main() {
 			REMOVE_CACHE
 		;;
 		--check)
-		    shift && [[ -n $* ]] && SHELL_HELP
-			CHECK_DEPENDS bash x86:gzip x86:wget-ssl uclient-fetch curl wget openssl
+			shift && [[ -n $* ]] && SHELL_HELP
+			CHECK_DEPENDS bash x86:gzip x86:wget-ssl uclient-fetch curl wget openssl which
 		;;
 		--env)
 			shift
 			[[ -z $* ]] && LIST_ENV 0 && EXIT 0
-			case $1 in
+			case "$1" in
 			1 | 2)
 				LIST_ENV $1
 			;;
@@ -698,12 +714,20 @@ AutoUpdate_Main() {
 			[[ $? == 0 ]] && EXIT 0 || EXIT 1
 		;;
 		-x)
+			shift
 			while [[ $1 ]];do
+				case "$1" in
+				url=* | path=/*)
+					:
+				;;
+				*)
+					SHELL_HELP
+				;;
+				esac
 				if [[ $1 =~ url= ]];then
 					[[ $1 =~ url= ]] && {
 					[[ -z $(echo $1 | cut -d "=" -f2) ]] && ECHO r "脚本地址不能为空!" && EXIT 1
 						AutoUpdate_Script_URL="$(echo $1 | cut -d "=" -f2)"
-						ECHO "使用自定义脚本地址: ${AutoUpdate_Script_URL}"
 					}
 				fi
 				[[ $1 =~ path= ]] && {
@@ -712,12 +736,13 @@ AutoUpdate_Main() {
 				}
 				shift
 			done
+			LOGGER "Downloader: ${Downloader}"
 			[[ -z ${SH_SAVE_PATH} ]] && SH_SAVE_PATH=/bin
 			UPDATE_SCRIPT ${SH_SAVE_PATH} ${AutoUpdate_Script_URL}
 		;;
 		-B)
 			shift
-			[[ ${TARGET_PROFILE} != x86_64 ]] && SHELL_HELP
+			[[ ${TARGET_BOARD} != x86 ]] && EXIT 1
 			CHANGE_BOOT $1
 		;;
 		-C)
@@ -726,21 +751,22 @@ AutoUpdate_Main() {
 		;;
 		-E)
 			shift
-			[[ -z $1 ]] && GET_FW_LOG local show && EXIT 0
-			case $1 in
-			cloud)
-				GET_FW_LOG $1 show
+			[[ -z $* ]] && GET_FW_LOG local
+			case "$1" in
+			[Cc]loud)
+				GET_FW_LOG $1
 			;;
 			*)
-				[[ ! $1 =~ R ]] && SHELL_HELP || GET_FW_LOG -v $1 show
+				[[ -z $* ]] && EXIT 0
+				[[ ! $1 =~ R[0-9] ]] && SHELL_HELP || GET_FW_LOG -v $1
 			;;
 			esac
 			EXIT
 		;;
-		-H | --help)
+		-H | --[Hh]elp)
 			SHELL_HELP
 		;;
-		-L | --list)
+		-L | --[Ll]ist)
 			shift && [[ -n $* ]] && SHELL_HELP
 			SHOW_VARIABLE
 		;;
@@ -750,24 +776,19 @@ AutoUpdate_Main() {
 				echo ${CURRENT_Version}
 				EXIT 0
 			}
-			case $1 in
-			cloud | Cloud)
+			case "$1" in
+			[Cc]loud)
 				GET_CLOUD_VERSION
 				[[ -z ${CLOUD_Firmware_Version} ]] && echo "未知" || echo "${CLOUD_Firmware_Version}"
 			;;
 			esac
 			EXIT 0
 		;;
-		-U)
-			shift && [[ -n $* ]] && SHELL_HELP
-			CHECK_UPDATES check
-			[[ $? == 0 ]] && EXIT 0 || EXIT 1
-		;;
 		-V)
 			shift
 			case "$1" in
-			cloud)
-				Result="$(${Downloader} https://ghproxy.com/https://raw.githubusercontent.com/Hyy2001X/AutoBuild-Actions/master/Scripts/AutoUpdate.sh -O - | egrep -o "V[0-9].+")"
+			[Cc]loud)
+				Result="$(${Downloader} - ${AutoUpdate_Script_URL} | egrep -o "V[0-9].+")"
 			;;
 			*)
 				Result=${Version}
@@ -786,7 +807,7 @@ AutoUpdate_Main() {
 	done
 }
 
-Version=V6.4.0
+Version=V6.4.5
 AutoUpdate_Path=/tmp/AutoUpdate
 AutoUpdate_Log_Path=/tmp
 AutoUpdate_Script_URL=https://ghproxy.com/https://raw.githubusercontent.com/Hyy2001X/AutoBuild-Actions/master/Scripts/AutoUpdate.sh

@@ -25,51 +25,55 @@
 
 1. 进入你的`AutoBuild-Actions`仓库,**下方所有操作都将在你的`AutoBuild-Actions`仓库下进行**
 
-   **提示: 下文中所有的 TARGET_PROFILE 均为你的设备名称,可以在 .config 中找到,例如 d-team_newifi-d2**
+   建议使用`Github Desktop`进行操作,修改文件或者同步最新改动都很方便 [[Github Desktop](https://desktop.github.com/)] [[Notepad++](https://notepad-plus-plus.org/downloads/)]
 
-   **在本地的 .config 文件中获取设备名称:** `egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
+   **提示**: 文中的`TARGET_PROFILE`为设备名称,可以在`.config`中获取,例如: `d-team_newifi-d2`
+
+   本地获取: `egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
    
-   **或者:** `grep 'TARGET_PROFILE' .config`,名称中不应含有 `DEVICE_`
+   或者: `grep 'TARGET_PROFILE' .config`,名称中不应含有`DEVICE_`
 
-2. 把本地的 `.config` 文件重命名为你设备的 **TARGET_PROFILE** 并上传到`/Configs`目录
+2. 把本地的`.config`文件**重命名**并上传到仓库的`/Configs`目录
 
-3. 编辑`.github/workflows/*.yml`文件,修改`第 7 和 32 行`为你设备的 **TARGET_PROFILE**
+3. 编辑`/.github/workflows/*.yml`文件,修改`第 7 行`为易于自己识别的名称
 
-   **使用其他源码** 修改`第 34 行`为源码的仓库地址:分支
+4. 编辑`/.github/workflows/*.yml`文件,修改`第 32 行`为上传的`.config`文件名称
 
-4. 按照需求编辑并定制`Scripts/AutoBuild_DiyScript.sh`文件
+   **使用其他源码** 修改`第 34 行`,例如: `openwrt:openwrt-21.02`、`openwrt:v19.07.7`
 
-   **注意: 为了更方便地同步最新改动,不建议修改 Scripts/AutoBuild_Function.sh 文件**
+5. 按照你的需求编辑`/Scripts/AutoBuild_DiyScript.sh`文件
 
-   **第三方软件包列表** 编辑`CustomPackages`目录下对应的 **TARGET_PROFILE** 的文件,按照现有语法为该设备添加第三方软件包 (可选)
+   **额外的软件包列表** 按照现有语法和提示编辑`/Scripts/AutoBuild_ExtraPackages.sh`文件
 
 **AutoBuild_DiyScript.sh: Diy_Core() 函数中的变量解释:**
 ```
    Author 作者名称,若该项留空将自动获取
-
-   Default_TARGET_PROFILE 设备名称,获取方法见上方
    
    Short_Firmware_Date 固件日期样式,当设置为 true: [20210601] false: [202106012359]
    
-   Default_LAN_IP 固件 LAN IP 地址,默认为 192.168.1.1
+   Default_LAN_IP 固件默认 LAN IP 地址
 
    INCLUDE_AutoBuild_Features 自动添加 AutoBuild 特性到固件
 
-   INCLUDE_DRM_I915 自动勾选 Intel Graphics 驱动
+   INCLUDE_DRM_I915 自动启用 Intel Graphics i915 驱动
 
    INCLUDE_Argon 自动添加 luci-theme-argon 主题和控制器
 
    INCLUDE_Obsolete_PKG_Compatible 优化原生 OpenWrt-19.07、21.02 支持 (测试特性)
    
+   Load_CustomPackages_List 启用后,将自动加载 /CustomPackages 下对应设备的软件包列表
+   
+   Checkout_Virtual_Images 上传 x86 设备虚拟磁盘镜像到 Release (类型需自行在 .config 勾选)
+   
    注: 若要启用某项功能,请将该值修改为 true,禁用某项功能则修改为 false 或留空
 ```
-**其他指令:** 编辑`Scripts/AutoBuild_DiyScript.sh`,参照下方语法:
+**其他指令:** 参照下方语法:
 ```
-   [使用 git clone 拉取文件]  AddPackage git 存放位置 软件包名 仓库地址 分支
+   [使用 git clone 拉取文件]  AddPackage git 存放位置 仓库名称 仓库作者 分支
 
-   [使用 svn co 拉取文件]  AddPackage svn 存放位置 软件包名 仓库地址/branches/分支/路径
+   [使用 svn co 拉取文件]  AddPackage svn 存放位置 软件包名 仓库作者/仓库名称/branches/分支名称/路径(可选)
 
-   [复制 /CustomFiles 文件到源码] Copy 文件(夹)名称 目标路径 新名称[可选]
+   [复制 /CustomFiles 文件到源码] Copy 文件(夹)名称 目标路径 新名称(可选)
 ```
 ## 编译固件(STEP 3):
 
@@ -85,13 +89,19 @@
 
    首先需要打开`TTYD 终端`或者在浏览器输入`IP 地址:7681`,按需输入下方指令:
 
-   检查并更新固件(保留配置),输入: `autoupdate`或`bash /bin/AutoUpdate.sh`
+   更新固件: `autoupdate`或`bash /bin/AutoUpdate.sh`
 
-   更新固件(FastGit 镜像加速): `autoupdate -P`
+   更新固件(优先使用镜像加速): `autoupdate -P`
 
-   更新固件(不保留配置): `autoupdate -n`或`autoupdate -n -P`
+   更新固件(不保留配置): `autoupdate -n`
+   
+   强制刷入固件: `autoupdate -F`
+   
+   跳过 sha256 校验: `autoupdate --skip`
+   
+   **注意:** 参数可叠加,例如: `autoupdate -n -P -F --skip path=/mnt/sda1`
 
-   查看更多使用方法: `autoUpdate --help`
+   查看更多参数/使用方法: `autoupdate --help`
 
    **注意: 该功能需要在 Diy-Core() 函数中设置`INCLUDE_AutoBuild_Features`为`true`**
 
