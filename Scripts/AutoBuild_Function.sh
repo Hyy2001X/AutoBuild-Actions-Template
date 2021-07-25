@@ -3,6 +3,7 @@
 # AutoBuild Functions
 
 Firmware-Diy_Before() {
+	TIME "[Firmware-Diy_Before]"
 	Diy_Core
 	Home="${GITHUB_WORKSPACE}/openwrt"
 	[[ -f ${GITHUB_WORKSPACE}/Openwrt.info ]] && source ${GITHUB_WORKSPACE}/Openwrt.info
@@ -59,11 +60,11 @@ Firmware-Diy_Before() {
 	case "${TARGET_BOARD}" in
 	x86)
 		AutoBuild_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-${CURRENT_Version}-${FW_Boot_Type}-$(Get_sha256 $1).${Firmware_Type_Defined}'
-		Egrep_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-${x86_Boot}.[0-9a-z]+.${Firmware_Type}'
+		REGEX_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-${x86_Boot}.[0-9a-z]+.${Firmware_Type}'
 	;;
 	*)
 		AutoBuild_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-${CURRENT_Version}-$(Get_sha256 $1).${Firmware_Type_Defined}'
-		Egrep_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-[0-9a-z]+.${Firmware_Type}'
+		REGEX_Firmware='AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}-R[0-9.]+-[0-9]+-[0-9a-z]+.${Firmware_Type}'
 	;;
 	esac
 	cat >> VARIABLE_Main <<EOF
@@ -77,7 +78,7 @@ CURRENT_Version=${CURRENT_Version}
 OP_Maintainer=${OP_Maintainer}
 OP_BRANCH=${OP_BRANCH}
 OP_REPO_NAME=${OP_REPO_NAME}
-Egrep_Firmware=${Egrep_Firmware}
+REGEX_Firmware=${REGEX_Firmware}
 EOF
 	cat >> VARIABLE_FILE <<EOF
 Home=${Home}
@@ -92,6 +93,7 @@ EOF
 
 Firmware-Diy_Main() {
 	Firmware-Diy_Before
+	TIME "[Firmware-Diy_Main]"
 	mkdir -p package/base-files/files/etc/AutoBuild
 	[ -f VARIABLE_Main ] && cp VARIABLE_Main package/base-files/files/etc/AutoBuild/Default_Variable
 	Copy CustomFiles/Depends/Custom_Variable package/base-files/files/etc/AutoBuild
@@ -189,6 +191,7 @@ Firmware-Diy_Main() {
 }
 
 Firmware-Diy_Other() {
+	TIME "[Firmware-Diy_Other]"
 	source ./VARIABLE_FILE
 	case "${PKG_Compatible}" in
 	19.07)
@@ -224,16 +227,17 @@ Firmware-Diy_Other() {
 		fi
 	fi
 	if [[ -s $GITHUB_WORKSPACE/Configs/Common ]];then
-		[[ ! "$(cat .config)" =~ "## DO NOT MERGE" ]] && {
+		[[ ! "$(cat .config)" =~ "## TEST" ]] && {
 			TIME "Merging [Configs/Common] to .config ..."
 			echo -e "\n$(cat $GITHUB_WORKSPACE/Configs/Common)" >> .config
 		} || {
-			sed -i '/## DO NOT MERGE/d' .config >/dev/null 2>&1
+			sed -i '/## TEST/d' .config >/dev/null 2>&1
 		}
 	fi
 }
 
 Firmware-Diy_End() {
+	TIME "[Firmware-Diy_End]"
 	source ./VARIABLE_FILE
 	mkdir -p bin/Firmware
 	sha256sums="${Firmware_Path}/sha256sums"
