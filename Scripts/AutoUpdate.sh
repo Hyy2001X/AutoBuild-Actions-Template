@@ -3,7 +3,7 @@
 # AutoUpdate for Openwrt
 # Depends on: bash wget-ssl/wget/uclient-fetch curl x86:gzip openssl
 
-Version=V6.5.2
+Version=V6.5.4
 ENV_DEPENDS="Author Github TARGET_PROFILE TARGET_BOARD TARGET_SUBTARGET Firmware_Type CURRENT_Version OP_Maintainer OP_BRANCH OP_REPO_NAME REGEX_Firmware"
 
 TITLE() {
@@ -37,6 +37,7 @@ SHELL_HELP() {
 	-H, --help			打印 AutoUpdate 帮助信息
 	-L, --log < | del>		<打印 | 删除> AutoUpdate 历史运行日志
 	    --log path=<PATH>		更改 AutoUpdate 运行日志路径为提供的绝对路径 <PATH>
+	-P <FastGit | Ghproxy>		使用 <FastGit | Ghproxy> 镜像加速
 	--backup path=<PATH>		备份当前系统配置文件到提供的绝对路径 <PATH>
 	--check-depends			检查 AutoUpdate 运行环境
 	--clean				清理 AutoUpdate 缓存
@@ -252,6 +253,7 @@ CHANGE_GITHUB() {
 	[[ ! ${Github} == $1 ]] && {
 		EDIT_VARIABLE edit ${Custom_Variable} Github $1
 		ECHO y "Github 地址已修改为: $1"
+		REMOVE_CACHE
 	}
 	EXIT 0
 }
@@ -343,15 +345,15 @@ GET_FW_LOG() {
 		FW_Version="$1"
 	;;
 	esac
-	if [[ -z $(find ${Run_Path} -type f -mmin -1 -name Update_Logs.json) || ! -s ${Run_Path}/Update_Logs.json ]];then
-		rm -f ${Run_Path}/Update_Logs.json
-		DOWNLOADER ${Run_Path}/Update_Logs.json ${Release_URL}/Update_Logs.json
-		[[ $? == 0 || -s ${Run_Path}/Update_Logs.json ]] && {
-			touch -a ${Run_Path}/Update_Logs.json
-		} || rm -f ${Run_Path}/Update_Logs.json
+	if [[ -z $(find ${Run_Path} -type f -mmin -1 -name FW_Logs.json) || ! -s ${Run_Path}/FW_Logs.json ]];then
+		rm -f ${Run_Path}/FW_Logs.json
+		DOWNLOADER ${Run_Path}/FW_Logs.json ${Release_URL}/Update_Logs.json
+		[[ $? == 0 || -s ${Run_Path}/FW_Logs.json ]] && {
+			touch -a ${Run_Path}/FW_Logs.json
+		} || rm -f ${Run_Path}/FW_Logs.json
 	fi
-	[[ -f ${Run_Path}/Update_Logs.json ]] && {
-		Result=$(jsonfilter -e '@["'"""${TARGET_PROFILE}"""'"]["'"""${FW_Version}"""'"]' < ${Run_Path}/Update_Logs.json)
+	[[ -s ${Run_Path}/FW_Logs.json ]] && {
+		Result=$(jsonfilter -e '@["'"""${TARGET_PROFILE}"""'"]["'"""${FW_Version}"""'"]' < ${Run_Path}/FW_Logs.json 2>/dev/null)
 		[[ -n ${Result} ]] && {
 			echo -e "\n${Grey}${FW_Version} for ${TARGET_PROFILE} 更新日志:"
 			echo -e "\n${Green}${Result}${White}"
@@ -395,6 +397,13 @@ GET_CLOUD_VERSION() {
 	local Z
 	Z=$(GET_CLOUD_FW $1 | egrep -o "R[0-9].*202[1-2][0-9]+")
 	[[ -n ${Z} ]] && echo "$Z"
+}
+
+GET_CLOUD_FW_SIZE() {
+	local X Y
+	let X="$(grep -n "$1" ${Run_Path}/Github_Tags | tail -1 | cut -d : -f 1)-4"
+	let Y="$(sed -n "${X}p" ${Run_Path}/Github_Tags | egrep -o "[0-9]+" | awk '{print ($1)/1048576}' | awk -F. '{print $1}')+1"
+	[[ ${Y} =~ [0-9] ]] && echo "${Y}M"
 }
 
 CHECK_UPDATES() {
@@ -441,7 +450,19 @@ PREPARE_UPGRADES() {
 			Special_Commands="${Special_Commands} [测试模式]"
 		;;
 		-P | --proxy)
-			Proxy_Mode=1
+			case $2 in
+			[Ff]ast[Gg]it)
+				Proxy_Type="${Release_FastGit_URL}"
+				shift
+			;;
+			[Gg]h[Pp]roxy)
+				Proxy_Type="${Release_Goproxy_URL}"
+				shift
+			;;
+			*)
+				Proxy_Type="${Release_Goproxy_URL}"
+			;;
+			esac
 			Special_Commands="${Special_Commands} [镜像加速]"
 		;;
 		-F | --force-write)
@@ -490,17 +511,17 @@ PREPARE_UPGRADES() {
 		ECHO r "云端固件信息获取失败,请检查网络后重试!"
 		EXIT 1
 	}
-	if [[ $(CHECK_PKG curl) == true && ${Proxy_Mode} != 1 ]];then
+	if [[ $(CHECK_PKG curl) == true && -z ${Proxy_Type} ]];then
 		Google_Check=$(curl -I -s --connect-timeout 3 google.com -w %{http_code} | tail -n1)
 		LOGGER "Google_Check: ${Google_Check}"
 		[[ ${Google_Check} != 301 ]] && {
 			ECHO r "网络连接不佳,优先使用镜像加速!"
-			Proxy_Mode=1
+			Proxy_Type=${Release_Goproxy_URL}
 		}
 	fi
 	CHECK_UPDATES
-	[[ ${Proxy_Mode} == 1 ]] && {
-		CLOUD_FW_URL="${Release_Goproxy_URL}"
+	[[ -n ${Proxy_Type} ]] && {
+		CLOUD_FW_URL="${Proxy_Type}"
 	} || CLOUD_FW_URL="${Release_URL}"
 	cat <<EOF
 
@@ -510,6 +531,7 @@ $([[ ${TARGET_BOARD} == x86 ]] && echo "固件格式: ${Firmware_Type} / ${x86_B
 
 $(echo -e "当前固件版本: ${CURRENT_Version}${CURRENT_Type}")
 $(echo -e "云端固件版本: ${CLOUD_FW_Version}${CHECKED_Type}")
+云端固件体积: $(GET_CLOUD_FW_SIZE ${CLOUD_FW_Name})
 
 云端固件名称: ${CLOUD_FW_Name}
 固件下载地址: ${CLOUD_FW_URL}
@@ -528,7 +550,7 @@ EOF
 	Retry_Times=5
 	ECHO "${Proxy_Echo}正在下载固件,请耐心等待 ..."
 	while [[ ${Retry_Times} -ge 0 ]];do
-		if [[ ! ${PROXY_Mode} == 1 && ${Retry_Times} == 4 ]];then
+		if [[ -z ${Proxy_Type} && ${Retry_Times} == 4 ]];then
 			ECHO g "尝试使用 [FastGit] 镜像加速下载固件!"
 			CLOUD_FW_URL="${Release_FastGit_URL}"
 		fi
