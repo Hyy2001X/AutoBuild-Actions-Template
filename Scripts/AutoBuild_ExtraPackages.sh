@@ -15,7 +15,7 @@
 # 区分不同源码
 case "${OP_Maintainer}/${OP_REPO_NAME}:${OP_BRANCH}" in
 coolsnowwolf/lede:master)
-	AddPackage git other luci-app-adguardhome Hyy2001X
+	:
 ;;
 openwrt/openwrt:openwrt-21.02)
 	:

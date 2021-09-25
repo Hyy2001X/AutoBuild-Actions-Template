@@ -37,8 +37,6 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
 
 2. 把本地的`.config`文件**重命名**并上传到仓库的`/Configs`目录
 
-    **/Configs/Common**: 通用配置文件,将在编译开始前被追加到 .config,用于同时管理多个设备,不需要删除即可
-
 3. 编辑`/.github/workflows/*.yml`文件,修改`第 7 行`为易于自己识别的名称
 
 4. 编辑`/.github/workflows/*.yml`文件,修改`第 32 行`为上传的`.config`文件名称
@@ -53,27 +51,31 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
    
    Banner_Title Banner 标题,与作者名称一同在 Shell 展示
 
-   Default_LAN_IP 固件默认 LAN IP 地址
+   * Default_LAN_IP 固件默认 LAN IP 地址
 
    Short_Firmware_Date 简短的固件日期 true: [20210601]; false: [202106012359]
-
-   Load_CustomPackages_List 启用后,将自动运行 /Scripts/AutoBuild_ExtraPackages.sh 脚本
-
-   Checkout_Virtual_Images 额外上传已检测到的  x86 虚拟磁盘镜像
    
-   Firmware_Format 自定义固件格式,多设备编译请搭配 case 使用
+   * Load_Common_Config 通用配置文件,启用后,将在编译开始前被追加到 .config
+
+   * Load_CustomPackages_List 启用后,将自动运行 /Scripts/AutoBuild_ExtraPackages.sh 脚本
+
+   Checkout_Virtual_Images 额外上传已检测到的 x86 虚拟磁盘镜像
+   
+   Firmware_Format 自定义固件格式,多设备编译请搭配 case 命令使用
 
    REGEX_Skip_Checkout 固件检测屏蔽正则列表,用于过滤无用文件
 
-   INCLUDE_AutoBuild_Features 自动添加 AutoBuild 固件特性,例如: 一键更新、部分优化
+   * INCLUDE_AutoBuild_Features 自动添加 AutoBuild 固件特性,例如: 一键更新、部分优化
 
-   INCLUDE_DRM_I915 自动启用 x86 设备的 Intel Graphics i915 驱动
+   * INCLUDE_DRM_I915 自动启用 x86 设备的 Intel Graphics i915 驱动
 
    INCLUDE_Argon 自动添加 luci-theme-argon 主题和主题控制器
 
    INCLUDE_Obsolete_PKG_Compatible 完善原生 OpenWrt-19.07、21.02 支持 (测试特性)
    
-   注: 禁用某项功能请将变量值修改为 false 或直接留空
+   注: 禁用部分功能请将变量值修改为 false,开启则为 true
+   
+   带 * 符号的选项表示仅在 coolsnowwolf/lede 源码测试通过,这表示可能在其他源码不能友好地运行
 ```
 **其他指令:** 参照下方语法:
 ```
@@ -107,7 +109,7 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
    
    "我不管,我就是要更新!": `autoupdate -f`
    
-   **注意:** 部分参数可一起使用,例如: `autoupdate -n -P -F --skip path=/mnt/sda1`
+   **注意:** 部分参数可一起使用,例如: `autoupdate -n -P G -F --skip --path /mnt/sda1`
 
    查看更多参数/使用方法: `autoupdate --help`
 
