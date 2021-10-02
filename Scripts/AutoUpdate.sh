@@ -3,7 +3,7 @@
 # AutoUpdate for Openwrt
 # Dependences: bash wget-ssl/wget/uclient-fetch curl openssl jsonfilter
 
-Version=V6.5.9
+Version=V6.6.0
 
 function TITLE() {
 	clear && echo "Openwrt-AutoUpdate Script by Hyy2001 ${Version}"
@@ -1161,6 +1161,14 @@ function AutoUpdate_Main() {
 		esac
 	done
 }
+
+KILL_OTHER() {
+	local i;for i in $(ps | grep -v grep | grep $1 | grep -v $$ | awk '{print $1}');do
+		kill -9 ${i} 2> /dev/null
+	done
+}
+
+KILL_OTHER AutoUpdate.sh
 
 Running_Path=/tmp/AutoUpdate
 Log_Path=/tmp
