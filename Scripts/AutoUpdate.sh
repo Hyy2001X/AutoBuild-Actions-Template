@@ -3,7 +3,7 @@
 # AutoUpdate for Openwrt
 # Dependences: bash wget-ssl/wget/uclient-fetch curl openssl jsonfilter
 
-Version=V6.6.0
+Version=V6.6.3
 
 function TITLE() {
 	clear && echo "Openwrt-AutoUpdate Script by Hyy2001 ${Version}"
@@ -84,7 +84,7 @@ EOF
 
 function RM() {
 	rm -f $1 2> /dev/null
-	[[ $? == 0 ]] && LOGGER "已删除文件: [$1]" || LOGGER "文件: [$1] 不存在或删除失败!"
+	[[ $? == 0 ]] && LOGGER "[RM] [$1] 删除成功!" || LOGGER "[RM] [$1] 不存在或删除失败!"
 }
 
 function LIST_ENV() {
@@ -105,14 +105,14 @@ function LIST_ENV() {
 
 function CHECK_ENV() {
 	while [[ $1 ]];do
-		[[ $(LIST_ENV 1) =~ $1 ]] && LOGGER "Checking env $1 ... true" || ECHO r "Checking env $1 ... false"
+		[[ $(LIST_ENV 1) =~ $1 ]] && LOGGER "[CHECK_ENV] Checking env $1 ... true" || ECHO r "[CHECK_ENV] Checking env $1 ... false"
 		shift
 	done
 }
 
 function EXIT() {
 	case $1 in
-	1 | 2)
+	1)
 		REMOVE_CACHE
 	;;
 	esac
@@ -175,10 +175,9 @@ function RANDOM() {
 
 function GET_SHA256SUM() {
 	[[ ! -f $1 && ! -s $1 ]] && {
-		LOGGER "未检测到文件 [$1],无法计算 SHA256 值!"
+		LOGGER "[GET_SHA256SUM] 未检测到文件 [$1],无法计算 SHA256 值!"
 		EXIT 1
 	}
-	LOGGER "[GET_SHA256SUM] 目标文件: [$1]"
 	local Result=$(sha256sum $1 | cut -c1-$2)
 	[[ -n ${Result} ]] && echo "${Result}"
 	LOGGER "[GET_SHA256SUM] 计算结果: [${Result}]"
@@ -201,7 +200,7 @@ function LOAD_VARIABLE() {
 		[[ -f $1 ]] && {
 			chmod 777 $1
 			source $1
-		} || LOGGER "未检测到环境变量列表: [$1]"
+		} || LOGGER "[LOAD_VARIABLE] 未检测到环境变量列表: [$1]"
 		shift
 	done
 	[[ -z ${TARGET_PROFILE} ]] && TARGET_PROFILE="$(jsonfilter -e '@.model.id' < /etc/board.json | tr ',' '_')"
@@ -296,7 +295,7 @@ function UPDATE_SCRIPT() {
 	}
 	if [[ ! -d $1 ]];then
 		mkdir -p $1 2> /dev/null || {
-			ECHO r "脚本存放目录 [$1] 创建失败!"
+			ECHO r "脚本存放路径 [$1] 创建失败!"
 			EXIT 1
 		}
 	fi
@@ -388,42 +387,46 @@ function CHECK_TIME() {
 	}
 }
 
-function GET_API() {
+function ANALYSIS_API() {
 	local url name date size version
 	local API_Dump=${Running_Path}/API_Dump
 	[[ $(CHECK_TIME ${API_File} 1) == false ]] && {
 		DOWNLOADER --path ${Running_Path} --file-name API_Dump --dl ${DOWNLOADERS} --url "$(URL_X ${Github_Release}/API G@@1 F@@1) ${Github_API}@@1 " --no-url-name --timeout 3 --type 固件信息 --quiet
 		[[ ! $? == 0 || -z $(cat ${API_Dump} 2> /dev/null) ]] && {
 			ECHO r "Github API 请求错误,请检查网络后重试!"
-			RM ${API_Dump}
 			EXIT 1
 		}
 		RM ${API_File} && touch -a ${API_File}
+		LOGGER "[ANALYSIS_API] 开始解析 Github API ..."
 		local i=1;while :;do
-			url=$(jsonfilter -e '@["assets"]' < ${API_Dump} | jsonfilter -e '@['"""$i"""'].browser_download_url' 2> /dev/null)
+			name=$(jsonfilter -e '@["assets"]' < ${API_Dump} | jsonfilter -e '@['"""$i"""'].name' 2> /dev/null)
 			[[ ! $? == 0 ]] && break
-			if [[ ${url} =~ "AutoBuild" || ${url} =~ "${TARGET_PROFILE}" ]]
+			if [[ ${name} =~ "AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}" ]]
 			then
-				size=$(jsonfilter -e '@["assets"]' < ${API_Dump} | jsonfilter -e '@['"""$i"""'].size' 2> /dev/null)
-				name=${url##*/}
-				size=$(echo ${size} | awk '{a=$1/1048576} {printf("%.2f\n",a)}')
 				version=$(echo ${name} | egrep -o "R[0-9.]+-[0-9]+")
+				url=$(jsonfilter -e '@["assets"]' < ${API_Dump} | jsonfilter -e '@['"""$i"""'].browser_download_url' 2> /dev/null)
+				size=$(jsonfilter -e '@["assets"]' < ${API_Dump} | jsonfilter -e '@['"""$i"""'].size' 2> /dev/null | awk '{a=$1/1048576} {printf("%.2f\n",a)}')
 				date=$(echo ${version} | cut -d '-' -f2)
 				printf "%-75s %-20s %-10s %-15s %s\n" ${name} ${version} ${date} ${size}MB ${url} >> ${API_File}
 			fi
 			i=$(($i + 1))
 		done
 	}
+	awk -F ' ' '{print NF}' ${API_File} | while read X;do
+		[[ ${X} != 5 ]] && LOGGER "[ANALYSIS_API] API 解析异常: ${X}"
+	done
 	[[ -z $(cat ${API_File} 2> /dev/null) ]] && {
-		ECHO r "Github API 解析失败,请尝试清理缓存后再试!"
-		RM ${API_File}
+		ECHO r "Github API 解析失败!"
 		EXIT 1
-	}
+	} || LOGGER "[ANALYSIS_API] Github API 解析成功!"
 }
 
 function GET_CLOUD_INFO() {
 	local Info
-	[[ ! -f ${API_File} ]] && return
+	[[ ! -s ${API_File} ]] && {
+		LOGGER "[GET_CLOUD_INFO] 未检测到 API 文件!"
+		return
+	}
 	if [[ $1 =~ (All|all|-a) ]];then
 		Info=$(grep "AutoBuild-${OP_REPO_NAME}-${TARGET_PROFILE}" ${API_File} | grep "${x86_Boot}" | uniq)
 		shift
@@ -550,12 +553,12 @@ function UPGRADE() {
 		Google_Check=$(curl -I -s --connect-timeout 3 google.com -w %{http_code} | tail -n1)
 		LOGGER "Google 连接检查结果: [${Google_Check}]"
 		[[ ${Google_Check} != 301 ]] && {
-			ECHO r "Google 连接失败,优先使用镜像加速下载"
+			ECHO r "Google 连接失败,优先使用镜像加速下载!"
 			Proxy_Type="All"
 		}
 	fi
 	ECHO "正在检查版本更新 ..."
-	GET_API
+	ANALYSIS_API
 	CHECK_UPDATES
 	CLOUD_FW_Version="$(GET_CLOUD_INFO version)"
 	CLOUD_FW_Name="$(GET_CLOUD_INFO name)"
@@ -581,15 +584,23 @@ $(echo -e "云端固件版本: ${CLOUD_FW_Version}${CHECKED_Type}")
 云端固件名称: ${CLOUD_FW_Name}
 云端固件体积: ${CLOUD_FW_Size}
 EOF
+	LOGGER "当前固件版本: ${CURRENT_Version}"
+	LOGGER "云端固件版本: ${CLOUD_FW_Version}"
+	LOGGER "云端固件名称: ${CLOUD_FW_Name}"
+	LOGGER "云端固件体积: ${CLOUD_FW_Size}"
 	GET_FW_LOG -v ${CLOUD_FW_Version}
 	case "${Upgrade_Stopped}" in
 	1 | 2)
 		[[ ${AutoUpdate_Mode} == 1 ]] && ECHO y "当前固件已是最新版本,无需更新!" && EXIT 0
 		[[ ${Upgrade_Stopped} == 1 ]] && MSG="已是最新版本" || MSG="云端固件版本为旧版"
 		[[ ! ${Force_Mode} == 1 ]] && {
+			LOGGER "当前${MSG}"
 			ECHO && read -p "${MSG},是否继续更新固件?[Y/n]:" Choose
 		} || Choose=Y
-		[[ ! ${Choose} =~ [Yy] ]] && EXIT 0
+		[[ ! ${Choose} =~ [Yy] ]] && {
+			LOGGER "用户已取消固件更新!"
+			EXIT 0
+		}
 	;;
 	esac
 	local URL
@@ -629,7 +640,10 @@ EOF
 				LOGGER "固件解压成功,固件已解压到: [${Firmware_Path}/${CLOUD_FW_Name}]"
 			}
 		else
-			[[ $(CHECK_PKG gzip) == true ]] && opkg remove gzip > /dev/null 2>&1
+			[[ $(CHECK_PKG gzip) == true ]] && {
+				LOGGER "卸载软件包 [gzip] ..."
+				opkg remove gzip > /dev/null 2>&1
+			}
 		fi
 	;;
 	esac
@@ -643,9 +657,6 @@ EOF
 
 function DOWNLOADER() {
 	local DL_Downloader DL_Name DL_URL DL_Path DL_Retries DL_Timeout DL_Type DL_Final Quiet_Mode No_URL_Name Print_Mode DL_Retires_All DL_URL_Final
-	LOGGER "开始解析传入参数 ..."
-	LOGGER "[$*]"
-	# --dl 下载器 --file-name 文件名称 --no-url-name --url 下载地址1@@重试次数 下载地址2@@重试次数 --path 保存位置 --timeout 超时 --type 类型 --quiet --print
 	while [[ $1 ]];do
 		case "$1" in
 		--dl)
@@ -660,7 +671,7 @@ function DOWNLOADER() {
 					shift
 				;;
 				*)
-					LOGGER "跳过未知下载器: [$1] ..."
+					LOGGER "[DOWNLOADER] 跳过未知下载器: [$1] ..."
 					shift
 				;;
 				esac
@@ -670,10 +681,9 @@ function DOWNLOADER() {
 				[[ ! $1 =~ '--' ]] && shift
 			done
 			[[ -z ${DL_Downloader} ]] && {
-				ECHO r "没有可用的下载器,请尝试更换手动安装!"
+				ECHO r "没有可用的下载器!"
 				EXIT 1
 			}
-			LOGGER "[--D Finished] Downloader: [${DL_Downloader}]"
 		;;
 		--file-name)
 			shift
@@ -682,7 +692,6 @@ function DOWNLOADER() {
 				[[ $1 =~ '--' ]] && break
 				[[ ! $1 =~ '--' ]] && shift
 			done
-			LOGGER "[--file-name Finished] 文件名称: [${DL_Name}]"
 		;;
 		--url)
 			shift
@@ -695,16 +704,15 @@ function DOWNLOADER() {
 				DL_Retires_All="$(echo ${DL_URL[*]} | egrep -o "@@[0-9]+" | egrep -o "[0-9]+" | awk '{Sum += $1};END {print Sum}')"
 				DL_URL_Count="${#DL_URL[@]}"
 			}
-			LOGGER "URL 数量: [${DL_URL_Count}] 总重试次数: [${DL_Retires_All}]"
+			LOGGER "[DOWNLOADER] URL 数量: [${DL_URL_Count}] 总重试次数: [${DL_Retires_All}]"
 			while [[ $1 ]];do
 				[[ $1 =~ '--' ]] && break
 				[[ ! $1 =~ '--' ]] && shift
 			done
-			LOGGER "[--url Finished] DL_URL: ${DL_URL[*]}"
 		;;
 		--no-url-name)
 			shift
-			LOGGER "Enabled No-Url-Filename Mode"
+			LOGGER "[DOWNLOADER] Enabled No-Url-Filename Mode"
 			No_URL_Name=1
 		;;
 		--path)
@@ -712,7 +720,7 @@ function DOWNLOADER() {
 			DL_Path="$1"
 			if [[ ! -d ${DL_Path} ]];then
 				mkdir -p ${DL_Path} 2> /dev/null || {
-					ECHO r "下载目录 [${DL_Path}] 创建失败!"
+					ECHO r "目标下载路径 [${DL_Path}] 创建失败!"
 					return 1
 				}
 			fi
@@ -720,12 +728,11 @@ function DOWNLOADER() {
 				[[ $1 =~ '--' ]] && break
 				[[ ! $1 =~ '--' ]] && shift
 			done
-			LOGGER "[--DL_PATH Finished] 存放路径: ${DL_Path}"
 		;;
 		--timeout)
 			shift
 			[[ ! $1 =~ [1-9] ]] && {
-				LOGGER "参数: [$1] 不是正确的数字"
+				LOGGER "[DOWNLOADER] 参数: [$1] 不是正确的数字!"
 				shift
 			} || {
 				DL_Timeout="$1"
@@ -733,7 +740,6 @@ function DOWNLOADER() {
 					[[ $1 =~ '--' ]] && break
 					[[ ! $1 =~ '--' ]] && shift
 				done
-				LOGGER "[--T Finished] 超时: ${DL_Timeout}s"
 			}
 		;;
 		--type)
@@ -743,26 +749,22 @@ function DOWNLOADER() {
 				[[ $1 =~ '--' ]] && break
 				[[ ! $1 =~ '--' ]] && shift
 			done
-			LOGGER "[--DL_Type Finished] 文件类型: ${DL_Type}"
 		;;
 		--quiet)
 			shift
-			LOGGER "Enabled Quiet Mode"
 			Quiet_Mode=quiet
 		;;
 		--print)
 			shift
-			LOGGER "Enabled Print Mode && Quiet Mode"
 			Print_Mode=1
 			Quiet_Mode=quiet
 		;;
 		*)
-			LOGGER "跳过未知参数: [$1] ..."
+			LOGGER "[DOWNLOADER] 跳过未知参数: [$1] ..."
 			shift
 		;;
 		esac
 	done
-	LOGGER "传入参数解析完成!"
 	case "${DL_Downloader}" in
 	wget | wget-ssl)
 		DL_Template="wget-ssl --quiet --no-check-certificate --no-dns-cache -x -4 --tries 1 --timeout 5 -O"
@@ -784,7 +786,7 @@ function DOWNLOADER() {
 		DL_Retries="${DL_URL_Cache##*@@}"
 		[[ -z ${DL_Retries} || ! ${DL_Retries} == [0-9] ]] && DL_Retries=1
 		DL_URL_Final="${DL_URL_Cache%*@@*}"
-		LOGGER "当前 URL: [${DL_URL_Final}] URL 重试次数: [${DL_Retries}]"
+		LOGGER "[DOWNLOADER] 当前 URL: [${DL_URL_Final}] URL 重试次数: [${DL_Retries}]"
 		for u in $(seq ${DL_Retries});do
 			sleep 1
 			[[ -z ${Failed} ]] && {
@@ -801,10 +803,9 @@ function DOWNLOADER() {
 				} || DL_Final="${DL_Template} ${DL_Path}/${DL_Name} ${DL_URL_Final}/${DL_Name}"
 			fi
 			[[ -f ${DL_Path}/${DL_Name} ]] && {
-				LOGGER "删除已存在的文件: [${DL_Path}/${DL_Name}] ..."
 				RM ${DL_Path}/${DL_Name}
 			}
-			LOGGER "执行下载: [${DL_Final}]"
+			LOGGER "[DOWNLOADER] 执行下载: [${DL_Final}]"
 			${DL_Final}
 			if [[ $? == 0 && -s ${DL_Path}/${DL_Name} ]];then
 				ECHO y ${Quiet_Mode} "${DL_Type}下载成功!"
@@ -848,7 +849,7 @@ function REMOVE_CACHE() {
 	rm -rf ${Running_Path}/API \
 		${Running_Path}/Update_Logs \
 		${Running_Path}/API_Dump 2> /dev/null
-	LOGGER "AutoUpdate 缓存清理完成!"
+	LOGGER "[REMOVE_CACHE] AutoUpdate 缓存清理完成!"
 }
 
 function LOG() {
@@ -949,7 +950,7 @@ function AutoUpdate_Main() {
 		[[ ! -d ${Running_Path} ]] && {
 			mkdir -p ${Running_Path}
 			[[ ! $? == 0 ]] && {
-				ECHO r "脚本运行目录 [${Running_Path}] 创建失败!"
+				ECHO r "脚本运行路径 [${Running_Path}] 创建失败!"
 				EXIT 1
 			}
 		}
@@ -1011,7 +1012,7 @@ function AutoUpdate_Main() {
 			} || {
 				if [[ ! -d $1 ]];then
 					mkdir -p $1 || {
-						ECHO r "备份存放目录 [$1] 创建失败!"
+						ECHO r "备份存放路径 [$1] 创建失败!"
 						EXIT 1
 					}
 				fi
@@ -1060,7 +1061,7 @@ function AutoUpdate_Main() {
 			case "$1" in
 			[Cc]loud)
 				shift
-				GET_API
+				ANALYSIS_API
 				GET_CLOUD_INFO $* version
 			;;
 			*)
@@ -1071,7 +1072,7 @@ function AutoUpdate_Main() {
 		;;
 		--fw-log)
 			shift
-			GET_API
+			ANALYSIS_API
 			[[ -z $* ]] && GET_FW_LOG local
 			case "$1" in
 			[Cc]loud)
@@ -1150,7 +1151,7 @@ function AutoUpdate_Main() {
 			EXIT 2
 		;;
 		-O)
-			GET_API
+			ANALYSIS_API
 			GET_CLOUD_INFO -a name
 			EXIT 0
 		;;
