@@ -5,11 +5,11 @@
 
 AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://github.com/Hyy2001X/AutoBuild-Actions-Template)
 
-测试通过的设备: `x86_64`
+自用软件包地址: [AutoBuild-Packages](https://github.com/Hyy2001X/AutoBuild-Packages)
 
 支持的 OpenWrt 源码: `coolsnowwolf/lede`、`immortalwrt/immortalwrt`、`openwrt/openwrt`、`lienol/openwrt`
 
-## 部署环境(STEP 1):
+## 一、部署环境
 
 1. 首先需要获取 **Github Token**: [点击这里](https://github.com/settings/tokens/new) 获取,
 
@@ -23,19 +23,19 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
 
    其中`Name`项随意填写,然后将你的 **Token** 粘贴到`Value`项,完成后点击`Add secert`
 
-## 定制固件(STEP 2):
+## 二、定制固件(可选,Fork 后可直接开始编译)
 
 1. 进入你的`AutoBuild-Actions`仓库,**下方所有操作都将在你的`AutoBuild-Actions`仓库下进行**
 
-   建议使用`Github Desktop`进行操作,修改文件或者同步最新改动都很方便 [[Github Desktop](https://desktop.github.com/)] [[Notepad++](https://notepad-plus-plus.org/downloads/)]
+   建议使用`Github Desktop`和`Notepad++`进行操作 [[Github Desktop](https://desktop.github.com/)] [[Notepad++](https://notepad-plus-plus.org/downloads/)]
 
-   **提示**: 文中的`TARGET_PROFILE`为设备名称,可以在`.config`中获取,例如: `d-team_newifi-d2`
+   **提示**: 文中的**TARGET_PROFILE**为设备名称,可以在`.config`中获取,例如: `d-team_newifi-d2`、`asus_rt-acrh17`
 
-   本地获取: `egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
+   本地获取,在源码目录执行`egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
    
-   或者: `grep 'TARGET_PROFILE' .config`,名称中不应含有`DEVICE_`
+   或`grep 'TARGET_PROFILE' .config`
 
-2. 把本地的`.config`文件**重命名**并上传到仓库的`/Configs`目录
+2. 编译`/Configs`目录中对应的配置文件,若设备配置不存在则需要把本地的`.config`文件**重命名**并上传
 
 3. 编辑`/.github/workflows/*.yml`文件,修改`第 7 行`为易于自己识别的名称
 
@@ -43,9 +43,9 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
 
 5. 按照需求且编辑`/Scripts/AutoBuild_DiyScript.sh`文件即可,`/Scripts`下的其他文件可以都不用修改
 
-   **额外的软件包列表** 按照现有语法和提示编辑`/Scripts/AutoBuild_ExtraPackages.sh`文件
+   **单独的软件包列表** 按照现有语法和提示编辑`/Scripts/AutoBuild_ExtraPackages.sh`
 
-**AutoBuild_DiyScript.sh: Diy_Core() 函数中的变量解释:**
+**/Scripts/AutoBuild_DiyScript.sh: Diy_Core() 函数中的变量解释:**
 ```
    Author 作者名称,若留空将自动获取为 Github 用户名
    
@@ -55,13 +55,13 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
 
    Short_Firmware_Date 简短的固件日期 true: [20210601]; false: [202106012359]
    
-   * Load_Common_Config 通用配置文件,启用后,将在编译开始前被追加到 .config
+   * Load_Common_Config 通用配置文件/Configs/Common,将被追加到当前设备的配置文件中
 
-   * Load_CustomPackages_List 启用后,将自动运行 /Scripts/AutoBuild_ExtraPackages.sh 脚本
+   * Load_CustomPackages_List 启用后,将运行 /Scripts/AutoBuild_ExtraPackages.sh 脚本
 
    Checkout_Virtual_Images 额外上传已检测到的 x86 虚拟磁盘镜像
    
-   Firmware_Format 自定义固件格式,多设备编译请搭配 case 命令使用
+   Firmware_Format 自定义固件格式,多个格式请用空格隔开
 
    REGEX_Skip_Checkout 固件检测屏蔽正则列表,用于过滤无用文件
 
@@ -77,15 +77,8 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
    
    带 * 符号的选项表示仅在 coolsnowwolf/lede 源码测试通过,这表示可能在其他源码不能友好地运行
 ```
-**其他指令:** 参照下方语法:
-```
-   [使用 git clone 拉取文件]  AddPackage git 存放位置 仓库名称 仓库作者 分支
 
-   [使用 svn co 拉取文件]  AddPackage svn 存放位置 软件包名 仓库作者/仓库名称/branches/分支名称/路径(可选)
-
-   [复制 /CustomFiles 文件到源码] Copy 文件(夹)名称 目标路径 新名称(可选)
-```
-## 编译固件(STEP 3):
+## 三、开始编译固件
 
    **一键编译** 先删除`第 26-27 行`的注释并保存,单(双)击重新点亮右上角的 **Star** 即可一键编译
 
@@ -95,23 +88,46 @@ AutoBuild-Actions 稳定版/模板地址: [AutoBuild-Actions-Template](https://g
    
    **临时修改 IP 地址** 该功能仅在**手动编译**时生效,点击`Run workflow`后即可输入 IP 地址(优先级**高于** `Default_LAN_IP`)
 
-## 使用 AutoUpdate 一键更新脚本:
+## 部署云端日志(可选)
 
-   首先需要打开`TTYD 终端`或者在使用`ssh`连接设备,按需输入下方指令:
+1. 下载本仓库中的 [Update_Logs.json](https://github.com/Hyy2001X/AutoBuild-Actions/releases/download/AutoUpdate/Update_Logs.json) 到本地
+
+2. 以 **JSON 格式**修改已下载到本地的`Update_Logs.json`文件
+
+3. 上传修改后的`Update_Logs.json`到你仓库的`Release`
+
+## 使用 AutoUpdate 一键更新固件脚本
+
+   首先需要打开`TTYD 终端`或者使用`SSH`,按需输入下方指令:
 
    更新固件: `autoupdate`或`bash /bin/AutoUpdate.sh`
 
-   更新固件(优先使用镜像加速 Ghproxy | FastGit): `autoupdate -P <G | F>`
+   更新固件(镜像加速 Ghproxy | FastGit): `autoupdate -P <G | F>`
 
    更新固件(不保留配置): `autoupdate -n`
    
    强制刷入固件: `autoupdate -F`
    
    "我不管,我就是要更新!": `autoupdate -f`
-   
+
+   查看所有可用参数: `autoupdate --help`
+
    **注意:** 部分参数可一起使用,例如: `autoupdate -n -P G -F --skip --path /mnt/sda1`
 
-   查看更多参数/使用方法: `autoupdate --help`
+## 使用 tools 固件工具箱
+
+   打开`TTYD 终端`或者使用`SSH`,执行指令`tools`或`bash /bin/AutoBuild_Tools.sh`即可启动固件工具箱
+
+   当前支持以下功能:
+
+   - USB 扩展内部空间
+   - Samba 相关设置
+   - 打印端口占用详细列表
+   - 打印所有硬盘信息
+   - 网络检查 (基础网络 | Google 连接检测)
+   - AutoBuild 固件环境修复
+   - 系统信息监控
+   - 打印在线设备列表
 
 ## 鸣谢
 
