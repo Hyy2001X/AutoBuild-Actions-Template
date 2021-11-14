@@ -33,19 +33,13 @@ case "${TARGET_PROFILE}" in
 asus_rt-acrh17)
 	:
 ;;
-lenovo_newifi-d1 | d-team_newifi-d2 | xiaoyu_xy-c5)
+d-team_newifi-d2 | xiaoyu_xy-c5)
 	:
 ;;
 x86_64 | x86)
 	:
 ;;
-redmi_ax6)
-	:
-;;
 xiaomi_redmi-router-ac2100)
-	:
-;;
-lenovo_newifi-y1)
 	:
 ;;
 esac
