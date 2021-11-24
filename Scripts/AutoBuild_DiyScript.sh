@@ -6,7 +6,7 @@ Diy_Core() {
 
 	Author=hongbo
 	Banner_Title="Powered by AutoBuild-Actions"
-	Default_LAN_IP=192.168.1.60
+	Default_LAN_IP=192.168.1.20
 
 	Load_Common_Config=false
 	Load_CustomPackages_List=false
