@@ -1,0 +1,3 @@
+CONFIG_TARGET_ipq807x=y
+CONFIG_TARGET_ipq807x_generic=y
+CONFIG_TARGET_ipq807x_generic_DEVICE_zte_mf269=y
