@@ -3,7 +3,7 @@
 # AutoUpdate for Openwrt
 # Dependences: wget-ssl/wget/uclient-fetch curl jq expr sysupgrade
 
-Version=V6.8.0
+Version=V6.8.5
 
 function TITLE() {
 	clear && echo "Openwrt-AutoUpdate Script by Hyy2001 ${Version}"
@@ -36,6 +36,8 @@ function SHELL_HELP() {
 	-B, --boot-mode <TYPE>		指定 x86 设备下载 <TYPE> 引导的固件 (e.g. UEFI BIOS)
 	-C <Github URL>			更改 Github 地址为提供的 <Github URL>
 	--api				打印 Github API 内容
+	--flag <FLAG>			更改固件标签为提供的 <FLAG>
+	--flag reset			恢复默认的固件标签
 	--help				打印 AutoUpdate 帮助信息
 	--log < | del>			<打印 | 删除> AutoUpdate 历史运行日志
 	--log --path <PATH>		更改 AutoUpdate 运行日志路径为提供的绝对路径 <PATH>
@@ -45,7 +47,6 @@ function SHELL_HELP() {
 	--chk				检查 AutoUpdate 运行环境
 	--clean				清理 AutoUpdate 缓存
 	--fw-log < | *>			打印 <当前 | 指定> 版本的固件更新日志
-	--fw-list			打印所有云端固件名称
 	--list				打印当前系统信息
 	--var <VARIABLE>		打印用户指定的环境变量 <VARIABLE>
 	--verbose			打印详细下载信息 *
@@ -64,6 +65,7 @@ function SHOW_VARIABLE() {
 
 设备名称:		$(uname -n) / ${TARGET_PROFILE}
 固件版本:		${OP_VERSION}
+固件标签:		${TARGET_FLAG}
 内核版本:		$(uname -r)
 运行内存:		Mem: $(MEMINFO Mem)M | Swap: $(MEMINFO Swap)M | Total: $(MEMINFO All)M
 其他参数:		${TARGET_BOARD} / ${TARGET_SUBTARGET}
@@ -131,7 +133,7 @@ function STRING() {
 	-f)
 		shift
 		[[ ! -r $1 ]] && return
-		cat "$1" 2> /dev/null | egrep -q "$2" 2> /dev/null && echo -n $2
+		egrep -q "$2" $1 2> /dev/null && echo -n $2
 	;;
 	*)
 		echo -n $1 | egrep -q $2 2> /dev/null && echo -n $2
@@ -297,7 +299,7 @@ function LOAD_VARIABLE() {
 		local if_ENV="$(GET_VARIABLE ${i} $1)"
 		if [[ ! ${if_ENV} ]]
 		then
-			ECHO r "未检测到环境变量: ${i}"
+			ECHO r "警告: 未检测到环境变量: ${i}"
 		fi
 		eval ${i}="${if_ENV}" 2> /dev/null
 	done
@@ -313,6 +315,12 @@ function LOAD_VARIABLE() {
 	[[ ! ${TARGET_PROFILE} ]] && eval TARGET_PROFILE="$(jq .model.id /etc/board.json 2> /dev/null)"
 	[[ ! ${TARGET_PROFILE} || ${TARGET_PROFILE} == null ]] && ECHO r "当前设备名称获取失败!" && EXIT 1
 	[[ ! ${OP_VERSION} ]] && OP_VERSION="未知"
+	if [[ $(LIST_ENV 1) =~ TARGET_FLAG ]]
+	then
+		[[ -z ${TARGET_FLAG} ]] && TARGET_FLAG="Full"
+	else
+		unset TARGET_FLAG
+	fi
 	DISTRIB_TARGET="$(GET_VARIABLE DISTRIB_TARGET /etc/openwrt_release)"
 	TARGET_BOARD="$(echo ${DISTRIB_TARGET} | cut -d '/' -f1)"
 	TARGET_SUBTARGET="$(echo ${DISTRIB_TARGET} | cut -d '/' -f2)"
@@ -333,16 +341,18 @@ function LOAD_VARIABLE() {
 }
 
 function CHANGE_GITHUB() {
-	if [[ ! $1 =~ https://github.com/ ]]
+	if [[ ! $1 =~ https://github.com/ || $# != 1 ]]
 	then
 		ECHO r "Github 地址格式错误,正确地址示例: https://github.com/Hyy2001X/AutoBuild-Actions"
 		EXIT 1
 	fi
-	UCI_Github="$(uci get autoupdate.@common[0].github 2> /dev/null)"
-	[[ ${UCI_Github} && ! ${UCI_Github} == $1 ]] && {
-		uci set autoupdate.@common[0].github="$1" 2> /dev/null
-		LOGGER "UCI 地址已修改为 [$1]"
-	}
+	UCI_Github="$(uci get autoupdate.@autoupdate[0].github 2> /dev/null)"
+	if [[ ${UCI_Github} && ! ${UCI_Github} == $1 ]]
+	then
+		uci set autoupdate.@autoupdate[0].github="$1" 2> /dev/null
+		uci commit autoupdate
+		LOGGER "UCI Github 地址已修改为 [$1]"
+	fi
 	if [[ ! ${Github} == $1 ]]
 	then
 		EDIT_VARIABLE edit ${Custom_Variable} Github $1
@@ -364,12 +374,49 @@ function CHANGE_BOOT() {
 	UEFI | BIOS)
 		EDIT_VARIABLE edit ${Custom_Variable} x86_Boot_Method $1
 		ECHO r "警告: 修改此设置后更新固件后可能导致设备无法启动!"
-		ECHO y "固件引导格式已指定为: [$1]"
+		ECHO y "固件引导格式已修改为: $1"
 		EXIT 0
 	;;
 	*)
 		ECHO r "错误的参数: [$1],当前支持的选项: [UEFI/BIOS]"
 		EXIT 1
+	;;
+	esac
+}
+
+function CHANGE_FLAG() {
+	case $1 in
+	reset)
+		EDIT_VARIABLE rm ${Custom_Variable} TARGET_FLAG
+		uci set autoupdate.@autoupdate[0].flag="$(GET_VARIABLE TARGET_FLAG ${Default_Variable})" 2> /dev/null
+		uci commit autoupdate
+		ECHO y "固件标签已恢复为默认!"
+		ECHO y "当前固件标签: $(GET_VARIABLE TARGET_FLAG ${Default_Variable})"
+		EXIT 0
+	;;
+	*)
+		if [[ ! $1 =~ (\"|=|-|_|\.|\#|\|) && $1 =~ [a-zA-Z0-9] ]]
+		then
+			UCI_Flag="$(uci get autoupdate.@autoupdate[0].flag 2> /dev/null)"
+			if [[ ${UCI_Flag} && ! ${UCI_Flag} == $1 ]]
+			then
+				uci set autoupdate.@autoupdate[0].flag="$1" 2> /dev/null
+				uci commit autoupdate
+				LOGGER "UCI 固件标签已修改为: $1"
+			fi
+			if [[ ! ${TARGET_FLAG} == $1 ]]
+			then
+				EDIT_VARIABLE edit ${Custom_Variable} TARGET_FLAG $1
+				ECHO r "警告: 修改此设置后可能导致无法检测到更新!"
+				ECHO y "固件标签已修改为: $1"
+			else
+				ECHO g "固件标签未修改!"
+			fi
+			EXIT 0
+		else
+			ECHO r "错误的参数: [$1], 当前仅支持 [a-zA-Z0-9] 且不能包含 <\" = - _ # |> 等特殊字符!"
+			EXIT 1
+		fi
 	;;
 	esac
 }
@@ -492,6 +539,34 @@ function ANALYZE_API() {
 	fi
 }
 
+function GET_FW_INFO() {
+	local Info Type Result
+	[[ ! -s ${API_File} ]] && {
+		ECHO r "未检测到 API 文件!"
+		EXIT 1
+	}
+	Info=$(grep "AutoBuild-${OP_REPO}-${TARGET_PROFILE}" ${API_File} | grep "${x86_Boot_Method}" | grep "${TARGET_FLAG}" | awk 'BEGIN {MAX = 0} {if ($6+0 > MAX+0) {MAX=$6 ;content=$0} } END {print content}')
+	Result="$(echo "${Info}" | awk '{print $"'${1}'"}' 2> /dev/null)"
+	case $1 in
+	1) Type="固件名称";;
+	2) Type="固件格式";;
+	3) Type="下载次数";;
+	4) Type="校验信息";;
+	5) Type="固件版本";;
+	6) Type="发布日期";;
+	7) Type="固件体积";;
+	8) Type="固件链接";;
+	*) Type="未定义信息";;
+	esac
+	[[ ! ${Result} == "-" ]] && {
+		LOGGER "${Type}: ${Result}"
+		echo -e "${Result}"
+	} || {
+		LOGGER "${Type}获取失败!"
+		return 1
+	}
+}
+
 function GET_CLOUD_LOG() {
 	local Version log_Test
 	[[ ! $(cat ${API_File} 2> /dev/null) =~ Update_Logs.json ]] && {
@@ -524,39 +599,6 @@ function GET_CLOUD_LOG() {
 	fi
 }
 
-function GET_FW_INFO() {
-	local Info Type Result
-	[[ ! -s ${API_File} ]] && {
-		ECHO r "未检测到 API 文件!"
-		EXIT 1
-	}
-	if [[ $1 == "-a" ]];then
-		Info=$(grep "AutoBuild-${OP_REPO}-${TARGET_PROFILE}" ${API_File} | grep "${x86_Boot_Method}" | uniq)
-		shift
-	else
-		Info=$(grep "AutoBuild-${OP_REPO}-${TARGET_PROFILE}" ${API_File} | grep "${x86_Boot_Method}" | awk 'BEGIN {MAX = 0} {if ($6+0 > MAX+0) {MAX=$6 ;content=$0} } END {print content}')
-	fi
-	Result="$(echo "${Info}" | awk '{print $"'${1}'"}' 2> /dev/null)"
-	case $1 in
-	1) Type="固件名称";;
-	2) Type="固件格式";;
-	3) Type="下载次数";;
-	4) Type="校验信息";;
-	5) Type="固件版本";;
-	6) Type="发布日期";;
-	7) Type="固件体积";;
-	8) Type="固件链接";;
-	*) Type="未定义信息";;
-	esac
-	[[ ! ${Result} == "-" ]] && {
-		LOGGER "获取${Type}: ${Result}"
-		echo -e "${Result}"
-	} || {
-		LOGGER "[GET_FW_INFO] ${Type}获取失败!"
-		return 1
-	}
-}
-
 function UPGRADE() {
 	TITLE
 	[[ $* =~ -f && $* =~ -F ]] && SHELL_HELP
@@ -585,7 +627,7 @@ function UPGRADE() {
 			Special_Commands="${Special_Commands} [镜像加速 ${Proxy_Type}]"
 		;;
 		-D)
-			DL_DEPENDS[@]="$2"
+			DL_DEPENDS=($2)
 			Special_Commands="${Special_Commands} [$1 ${DL_DEPENDS[@]}]"
 			shift
 		;;
@@ -666,6 +708,7 @@ function UPGRADE() {
 ${Grey}### 系统 & 云端固件详情 ###${White}
 
 设备名称: ${TARGET_PROFILE}
+固件标签: ${TARGET_FLAG}
 内核版本: $(uname -sr)
 $([[ ${TARGET_BOARD} == x86 ]] && echo "固件格式: ${CLOUD_FW_Format} / ${x86_Boot_Method}" || echo "固件格式: ${CLOUD_FW_Format}")
 
@@ -1084,8 +1127,8 @@ function AutoUpdate_Main() {
 		;;
 		-D)
 			case "${Input[$((${E} + 1))]}" in
-			wget | curl | wget-ssl | uclient-fetch)
-				DL_DEPENDS[@]=${Input[$((${E} + 1))]}
+			wget* | curl | uclient-fetch)
+				DL_DEPENDS=(${Input[$((${E} + 1))]})
 			;;
 			*)
 				ECHO r "暂不支持当前下载器: [${Input[$((${E} + 1))]}]"
@@ -1153,15 +1196,20 @@ function AutoUpdate_Main() {
 		;;
 		--env-list)
 			shift
-			[[ ! $* ]] && LIST_ENV 0 && EXIT 0
 			case "$1" in
 			1 | 2)
 				LIST_ENV $1
 			;;
 			*)
-				SHELL_HELP
+				LIST_ENV 0
 			;;
 			esac
+			EXIT
+		;;
+		--flag)
+			shift
+			[[ -z $* || $# != 1 ]] && SHELL_HELP
+			CHANGE_FLAG $1
 			EXIT
 		;;
 		-V)
@@ -1238,6 +1286,7 @@ function AutoUpdate_Main() {
 		;;
 		-C)
 			shift
+			[[ -z $* || $# != 1 ]] && SHELL_HELP
 			CHANGE_GITHUB $*
 			EXIT
 		;;
@@ -1248,11 +1297,6 @@ function AutoUpdate_Main() {
 		--log)
 			shift
 			LOG $*
-			EXIT
-		;;
-		--fw-list)
-			ANALYZE_API
-			GET_FW_INFO -a 1
 			EXIT
 		;;
 		*)
@@ -1280,6 +1324,7 @@ ENV_DEPENDS=(
 	Author
 	Github
 	TARGET_PROFILE
+	TARGET_FLAG
 	OP_VERSION
 	OP_AUTHOR
 	OP_BRANCH

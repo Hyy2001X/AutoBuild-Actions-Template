@@ -51,31 +51,53 @@ Firmware_Diy_Before() {
 	TARGET_SUBTARGET="$(awk -F '[="]+' '/TARGET_SUBTARGET/{print $2}' ${CONFIG_TEMP})"
 	[[ -z ${Firmware_Format} || ${Firmware_Format} =~ (false|AUTO) ]] && {
 		case "${TARGET_BOARD}" in
-		ramips | reltek | ipq40xx | ath79 | ipq807x)
+		ramips | reltek | ath* | ipq* | bcm47xx | bmips | kirkwood | mediatek)
 			Firmware_Format=bin
 		;;
-		rockchip | x86)
-			[[ $(cat ${CONFIG_TEMP}) =~ CONFIG_TARGET_IMAGES_GZIP=y ]] && {
-				Firmware_Format=img.gz
-			} || Firmware_Format=img
+		rockchip | x86 | bcm27xx | mxs | sunxi | zynq)
+			Firmware_Format=$(if_IMG)
+		;;
+		mvebu)
+			case "${TARGET_SUBTARGET}" in
+			cortexa53 | cortexa72)
+				Firmware_Format=$(if_IMG)
+			;;
+			esac
+		;;
+		octeon | oxnas | pistachio)
+			Firmware_Format=tar
 		;;
 		esac
 	}
+	[[ ${Author_URL} != false && ${Author_URL} == AUTO ]] && Author_URL=${Github}
+	[[ ${Author_URL} == false ]] && unset Author_URL
+	if [[ ${Default_FLAG} == AUTO ]]
+	then
+		TARGET_FLAG=${CONFIG_FILE/${TARGET_PROFILE}-/}
+		[[ ${TARGET_FLAG} =~ ${TARGET_PROFILE} || -z ${TARGET_FLAG} || ${TARGET_FLAG} == ${CONFIG_FILE} ]] && TARGET_FLAG=Full
+	else
+		if [[ ! ${Default_FLAG} =~ (\"|=|-|_|\.|\#|\|) && ${Default_FLAG} =~ [a-zA-Z0-9] ]]
+		then
+			TARGET_FLAG="${Default_FLAG}"
+		fi
+	fi
+	if [[ ! ${Tempoary_FLAG} =~ (\"|=|-|_|\.|\#|\|) && ${Tempoary_FLAG} =~ [a-zA-Z0-9] ]]
+	then
+		TARGET_FLAG="${Tempoary_FLAG}"
+	fi
 	case "${TARGET_BOARD}" in
 	x86)
-		AutoBuild_Firmware="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-BOOT-SHA256.FORMAT"
+		AutoBuild_Firmware="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-BOOT-${TARGET_FLAG}-SHA256.FORMAT"
 	;;
 	*)
-		AutoBuild_Firmware="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-SHA256.FORMAT"
+		AutoBuild_Firmware="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-${TARGET_FLAG}-SHA256.FORMAT"
 	;;
 	esac
-
 	cat >> ${GITHUB_ENV} <<EOF
 Home=${Home}
 CONFIG_TEMP=${CONFIG_TEMP}
 INCLUDE_AutoBuild_Features=${INCLUDE_AutoBuild_Features}
 INCLUDE_Original_OpenWrt_Compatible=${INCLUDE_Original_OpenWrt_Compatible}
-INCLUDE_DRM_I915=${INCLUDE_DRM_I915}
 Checkout_Virtual_Images=${Checkout_Virtual_Images}
 AutoBuild_Firmware=${AutoBuild_Firmware}
 CustomFiles=${GITHUB_WORKSPACE}/CustomFiles
@@ -119,6 +141,7 @@ Github=${Github}
 TARGET_PROFILE=${TARGET_PROFILE}
 TARGET_BOARD=${TARGET_BOARD}
 TARGET_SUBTARGET=${TARGET_SUBTARGET}
+TARGET_FLAG=${TARGET_FLAG}
 OP_VERSION=${OP_VERSION}
 OP_AUTHOR=${OP_AUTHOR}
 OP_REPO=${OP_REPO}
@@ -151,9 +174,6 @@ EOF
 			cat >> ${Version_File} <<EOF
 
 sed -i '/check_signature/d' /etc/opkg.conf
-# sed -i 's#mirrors.cloud.tencent.com/lede#downloads.immortalwrt.cnsztl.eu.org#g' /etc/opkg/distfeeds.conf
-# sed -i 's#18.06.9/##g' /etc/opkg/distfeeds.conf
-# sed -i 's#releases/#snapshots/#g' /etc/opkg/distfeeds.conf
 
 sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/aliyundrive-webdav.lua
 sed -i 's/services/nas/g' /usr/lib/lua/luci/view/aliyundrive-webdav/aliyundrive-webdav_log.htm
@@ -176,19 +196,37 @@ then
 fi
 exit 0
 EOF
-			sed -i "s?${zzz_Default_Version}?${zzz_Default_Version} @ ${Author} [${Display_Date}]?g" ${Version_File}
+			if [[ -n ${TARGET_FLAG} ]]
+			then
+				sed -i "s?${zzz_Default_Version}?${TARGET_FLAG} ${zzz_Default_Version} @ ${Author} [${Display_Date}]?g" ${Version_File}
+			else
+				sed -i "s?${zzz_Default_Version}?${zzz_Default_Version} @ ${Author} [${Display_Date}]?g" ${Version_File}
+			fi
 			ECHO "Downloading [ShadowSocksR Plus+] for coolsnowwolf/lede ..."
 			AddPackage git other helloworld fw876 master
 			sed -i 's/143/143,8080,8443/' $(PKG_Finder d package luci-app-ssr-plus)/root/etc/init.d/shadowsocksr
 		;;
 		immortalwrt/immortalwrt)
 			Copy ${CustomFiles}/Depends/openwrt_release_${OP_AUTHOR} ${BASE_FILES}/etc openwrt_release
-			sed -i "s?ImmortalWrt?ImmortalWrt @ ${Author} [${Display_Date}]?g" ${Version_File}
+			if [[ -n ${TARGET_FLAG} ]]
+			then
+				sed -i "s?ImmortalWrt?ImmortalWrt ${TARGET_FLAG} @ ${Author} [${Display_Date}]?g" ${Version_File}
+			else
+				sed -i "s?ImmortalWrt?ImmortalWrt @ ${Author} [${Display_Date}]?g" ${Version_File}
+			fi
 		;;
 		esac
 		sed -i "s?By?By ${Author}?g" ${CustomFiles}/Depends/banner
 		sed -i "s?Openwrt?Openwrt ${OP_VERSION} / AutoUpdate ${AutoUpdate_Version}?g" ${CustomFiles}/Depends/banner
-		[[ -n ${Banner_Message} ]] && sed -i "s?Powered by AutoBuild-Actions?${Banner_Message}?g" ${CustomFiles}/Depends/banner
+		if [[ -n ${Banner_Message} ]]
+		then
+			if [[ -n ${TARGET_FLAG} ]]
+			then
+				sed -i "s?Powered by AutoBuild-Actions?${Banner_Message} @ ${TARGET_FLAG}?g" ${CustomFiles}/Depends/banner
+			else
+				sed -i "s?Powered by AutoBuild-Actions?${Banner_Message}?g" ${CustomFiles}/Depends/banner
+			fi
+		fi
 		case "${OP_AUTHOR}/${OP_REPO}" in
 		immortalwrt/immortalwrt)
 			Copy ${CustomFiles}/Depends/banner ${Home}/$(PKG_Finder d package default-settings)/files openwrt_banner
@@ -210,20 +248,11 @@ EOF
 			sed -i "s/${Old_IP}/${Default_IP}/g" ${BASE_FILES}/bin/config_generate
 		fi
 	}
-	[[ ${INCLUDE_DRM_I915} == true && ${TARGET_BOARD} == x86 ]] && {
-		for X in $(ls -1 target/linux/x86 | grep "config-")
-		do
-			cat >> ${Home}/target/linux/x86/${X} <<EOF
-
-CONFIG_64BIT=y
-CONFIG_DRM=y
-CONFIG_DRM_I915=y
-CONFIG_DRM_I915_GVT=y
-CONFIG_DUMMY_CONSOLE=y
-EOF
-		done
-		unset X
-	}
+	for X in $(ls -1 target/linux/generic | grep "config-")
+	do
+		sed -i '/CONFIG_FAT_DEFAULT_IOCHARSET/d' target/linux/generic/${X}
+		echo -e '\nCONFIG_FAT_DEFAULT_IOCHARSET="utf8"' >> target/linux/generic/${X}
+	done
 	ECHO "[Firmware_Diy_Main] Done"
 }
 
@@ -257,8 +286,8 @@ CONFIG_PACKAGE_dnsmasq-full=y
 # CONFIG_PACKAGE_wpad-wolfssl is not set
 CONFIG_PACKAGE_wpad-openssl=y
 EOF
-				Copy ${CustomFiles}/Patches/0003-upx-ucl-${OP_BRANCH}.patch ${Home}
-				cat 0003-upx-ucl-${OP_BRANCH}.patch | patch -p1 > /dev/null 2>&1
+				Copy ${CustomFiles}/Patches/fix_upx-ucl-${OP_BRANCH}.patch ${Home}
+				cat fix_upx-ucl-${OP_BRANCH}.patch | patch -p1 > /dev/null 2>&1
 				AddPackage svn feeds/packages golang coolsnowwolf/packages/trunk/lang
 				ECHO "Starting to convert zh-cn translation files to zh_Hans ..."
 				cd package && bash ${Scripts}/Convert_Translation.sh && cd -
@@ -271,9 +300,8 @@ EOF
 			ECHO "[${OP_AUTHOR}]: Current OP_AUTHOR is not supported !"
 		fi
 	fi
-	if [[ ${Author_URL} != false ]]
+	if [[ -n ${Author_URL} ]]
 	then
-		[[ ${Author_URL} == AUTO ]] && Author_URL=${Github}
 			cat >> ${CONFIG_TEMP} <<EOF
 
 CONFIG_KERNEL_BUILD_USER="${Author}"
@@ -300,7 +328,12 @@ Firmware_Diy_End() {
 		}
 	;;
 	*)
-		Process_Firmware ${Firmware_Format}
+		if [[ -n ${Firmware_Format} ]]
+		then
+			Process_Firmware ${Firmware_Format}
+		else
+			Process_Firmware $(List_Format)
+		fi
 	;;
 	esac
 	[[ $(ls) =~ 'AutoBuild-' ]] && {
@@ -322,21 +355,21 @@ Process_Firmware_Core() {
 	Firmware_Format_Defined=$1
 	shift
 	while [[ $1 ]];do
-		AutoBuild_Firmware=$(Get_Variable AutoBuild_Firmware)
+		Firmware=${AutoBuild_Firmware}
 		case "${TARGET_BOARD}" in
 		x86)
 			[[ $1 =~ efi ]] && {
 				FW_Boot_Method=UEFI
 			} || FW_Boot_Method=BIOS
-			AutoBuild_Firmware=${AutoBuild_Firmware/BOOT/${FW_Boot_Method}}
+			Firmware=${Firmware/BOOT/${FW_Boot_Method}}
 		;;
 		esac
-		AutoBuild_Firmware=${AutoBuild_Firmware/SHA256/$(Get_SHA256 $1)}
-		AutoBuild_Firmware=${AutoBuild_Firmware/FORMAT/${Firmware_Format_Defined}}
+		Firmware=${Firmware/SHA256/$(Get_SHA256 $1)}
+		Firmware=${Firmware/FORMAT/${Firmware_Format_Defined}}
 		[[ -f $1 ]] && {
-			ECHO "Copying [$1] to [${AutoBuild_Firmware}] ..."
-			cp -a $1 ${AutoBuild_Firmware}
-		} || ECHO "Unable to access [${AutoBuild_Firmware}] ..."
+			ECHO "Copying [$1] to [${Firmware}] ..."
+			cp -a $1 ${Firmware}
+		} || ECHO "Unable to access [${Firmware}] ..."
 		shift
 	done
 }
@@ -370,21 +403,16 @@ Get_SHA256() {
 	List_REGEX | grep "$1" | cut -c1-5
 }
 
-Get_Variable() {
-	local Result="$(grep "$1" ${ENV_FILE} | grep -v "#" | awk -F '=' '{print $2}')"
-	if [[ -n ${Result} ]]
-	then
-		eval echo "${Result}"
-		return 0
-	else
-		return 1
-	fi
-}
-
 GET_Branch() {
     git -C $(pwd) rev-parse --abbrev-ref HEAD | grep -v HEAD || \
     git -C $(pwd) describe --exact-match HEAD || \
     git -C $(pwd) rev-parse HEAD
+}
+
+if_IMG() {
+	[[ $(cat ${CONFIG_TEMP}) =~ CONFIG_TARGET_IMAGES_GZIP=y ]] && {
+		echo img.gz
+	} || echo img
 }
 
 ECHO() {
