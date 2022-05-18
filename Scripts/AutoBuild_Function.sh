@@ -4,21 +4,21 @@
 
 Firmware_Diy_Before() {
 	ECHO "[Firmware_Diy_Before] Starting ..."
-	Home="${GITHUB_WORKSPACE}/openwrt"
+	WORK="${GITHUB_WORKSPACE}/openwrt"
 	CONFIG_TEMP="${GITHUB_WORKSPACE}/openwrt/.config"
-	CD ${Home}
+	CD ${WORK}
 	Firmware_Diy_Core
-	[[ ${Short_Firmware_Date} == true ]] && Compile_Date="$(echo ${Compile_Date} | cut -c1-8)"
+	[[ ${Short_Fw_Date} == true ]] && Compile_Date="$(echo ${Compile_Date} | cut -c1-8)"
 	Github="$(grep "https://github.com/[a-zA-Z0-9]" ${GITHUB_WORKSPACE}/.git/config | cut -c8-100 | sed 's/^[ \t]*//g')"
 	[[ -z ${Author} || ${Author} == AUTO ]] && Author="$(echo "${Github}" | cut -d "/" -f4)"
 	OP_AUTHOR="$(echo "${REPO_URL}" | cut -d "/" -f4)"
 	OP_REPO="$(echo "${REPO_URL}" | cut -d "/" -f5)"
-	OP_BRANCH="$(GET_Branch)"
+	OP_BRANCH="$(Get_Branch)"
 	if [[ ${OP_BRANCH} =~ (master|main) ]]
 	then
 		OP_VERSION_HEAD="R$(date +%y.%m)-"
 	else
-		OP_BRANCH="$(echo ${OP_BRANCH} | egrep -o "[0-9]+.[0-9]+")"
+		OP_BRANCH="$(echo ${OP_BRANCH} | egrep -o "[0-9]+.[0-9]+" | awk 'NR==1')"
 		OP_VERSION_HEAD="R${OP_BRANCH}-"
 	fi
 	case "${OP_AUTHOR}/${OP_REPO}" in
@@ -41,44 +41,46 @@ Firmware_Diy_Before() {
 		x86_Test="$(egrep -o "CONFIG_TARGET.*Generic=y" ${CONFIG_TEMP} | sed -r 's/CONFIG_TARGET_(.*)_Generic=y/\1/')"
 		[[ -z ${x86_Test} ]] && break
 	done
-	[[ ${x86_Test} == x86_64 ]] && {
+	if [[ ${x86_Test} == x86_64 ]]
+	then
 		TARGET_PROFILE=x86_64
-	} || {
+	else
 		TARGET_PROFILE="$(egrep -o "CONFIG_TARGET.*DEVICE.*=y" ${CONFIG_TEMP} | sed -r 's/.*DEVICE_(.*)=y/\1/')"
-	}
+	fi
 	[[ -z ${TARGET_PROFILE} ]] && ECHO "Unable to get [TARGET_PROFILE] !"
 	TARGET_BOARD="$(awk -F '[="]+' '/TARGET_BOARD/{print $2}' ${CONFIG_TEMP})"
 	TARGET_SUBTARGET="$(awk -F '[="]+' '/TARGET_SUBTARGET/{print $2}' ${CONFIG_TEMP})"
-	[[ -z ${Firmware_Format} || ${Firmware_Format} =~ (false|AUTO) ]] && {
+	if [[ -z ${Fw_MFormat} || ${Fw_MFormat} =~ (false|AUTO) ]]
+	then
 		case "${TARGET_BOARD}" in
 		ramips | reltek | ath* | ipq* | bcm47xx | bmips | kirkwood | mediatek)
-			Firmware_Format=bin
+			Fw_MFormat=bin
 		;;
 		rockchip | x86 | bcm27xx | mxs | sunxi | zynq)
-			Firmware_Format="$(if_IMG)"
+			Fw_MFormat="$(gz_Check)"
 		;;
 		mvebu)
 			case "${TARGET_SUBTARGET}" in
 			cortexa53 | cortexa72)
-				Firmware_Format="$(if_IMG)"
+				Fw_MFormat="$(gz_Check)"
 			;;
 			esac
 		;;
 		octeon | oxnas | pistachio)
-			Firmware_Format=tar
+			Fw_MFormat=tar
 		;;
 		esac
-	}
+	fi
 	[[ ${Author_URL} != false && ${Author_URL} == AUTO ]] && Author_URL="${Github}"
 	[[ ${Author_URL} == false ]] && unset Author_URL
-	if [[ ${Default_FLAG} == AUTO ]]
+	if [[ ${Default_Flag} == AUTO ]]
 	then
 		TARGET_FLAG=${CONFIG_FILE/${TARGET_PROFILE}-/}
 		[[ ${TARGET_FLAG} =~ ${TARGET_PROFILE} || -z ${TARGET_FLAG} || ${TARGET_FLAG} == ${CONFIG_FILE} ]] && TARGET_FLAG=Full
 	else
-		if [[ ! ${Default_FLAG} =~ (\"|=|-|_|\.|\#|\|) && ${Default_FLAG} =~ [a-zA-Z0-9] ]]
+		if [[ ! ${Default_Flag} =~ (\"|=|-|_|\.|\#|\|) && ${Default_Flag} =~ [a-zA-Z0-9] ]]
 		then
-			TARGET_FLAG="${Default_FLAG}"
+			TARGET_FLAG="${Default_Flag}"
 		fi
 	fi
 	if [[ ! ${Tempoary_FLAG} =~ (\"|=|-|_|\.|\#|\|) && ${Tempoary_FLAG} =~ [a-zA-Z0-9] ]]
@@ -87,29 +89,29 @@ Firmware_Diy_Before() {
 	fi
 	case "${TARGET_BOARD}" in
 	x86)
-		AutoBuild_Firmware="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-BOOT-${TARGET_FLAG}-SHA256.FORMAT"
+		AutoBuild_Fw="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-BOOT-${TARGET_FLAG}-SHA256.FORMAT"
 	;;
 	*)
-		AutoBuild_Firmware="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-${TARGET_FLAG}-SHA256.FORMAT"
+		AutoBuild_Fw="AutoBuild-${OP_REPO}-${TARGET_PROFILE}-${OP_VERSION}-${TARGET_FLAG}-SHA256.FORMAT"
 	;;
 	esac
 	cat >> ${GITHUB_ENV} <<EOF
-Home=${Home}
+WORK=${WORK}
 CONFIG_TEMP=${CONFIG_TEMP}
-INCLUDE_AutoBuild_Features=${INCLUDE_AutoBuild_Features}
-INCLUDE_Original_OpenWrt_Compatible=${INCLUDE_Original_OpenWrt_Compatible}
-Checkout_Virtual_Images=${Checkout_Virtual_Images}
-AutoBuild_Firmware=${AutoBuild_Firmware}
+AutoBuild_Features=${AutoBuild_Features}
+Compatible=${Compatible}
+x86_Full_Images=${x86_Full_Images}
+AutoBuild_Fw=${AutoBuild_Fw}
 CustomFiles=${GITHUB_WORKSPACE}/CustomFiles
 Scripts=${GITHUB_WORKSPACE}/Scripts
 BASE_FILES=${GITHUB_WORKSPACE}/openwrt/package/base-files/files
 FEEDS_LUCI=${GITHUB_WORKSPACE}/openwrt/package/feeds/luci
 FEEDS_PKG=${GITHUB_WORKSPACE}/openwrt/package/feeds/packages
-Banner_Message="${Banner_Message}"
-REGEX_Skip_Checkout="${REGEX_Skip_Checkout}"
+Default_Title="${Default_Title}"
+Regex_Skip="${Regex_Skip}"
 Version_File=${Version_File}
-Firmware_Format=${Firmware_Format}
-FEEDS_CONF=${Home}/feeds.conf.default
+Fw_MFormat=${Fw_MFormat}
+FEEDS_CONF=${WORK}/feeds.conf.default
 Author_URL=${Author_URL}
 ENV_FILE=${GITHUB_ENV}
 
@@ -121,18 +123,12 @@ EOF
 
 Firmware_Diy_Main() {
 	ECHO "[Firmware_Diy_Main] Starting ..."
-	CD ${Home}
+	CD ${WORK}
 	chmod 777 -R ${Scripts} ${CustomFiles}
-	if [[ ${INCLUDE_AutoBuild_Features} == true ]]
+	if [[ ${AutoBuild_Features} == true ]]
 	then
-		MKDIR ${BASE_FILES}/etc/AutoBuild
-		touch ${BASE_FILES}/etc/AutoBuild/Default_Variable ${BASE_FILES}/etc/AutoBuild/Custom_Variable
-		cat >> ${BASE_FILES}/etc/AutoBuild/Default_Variable <<EOF
-## 请不要修改此文件中的内容, 自定义变量请在 Custom_Variable 中添加或修改
-## 该文件将在运行 AutoUpdate.sh 时被读取, 该文件中的变量优先级低于 Custom_Variable
-
-EOF
-		for i in ${BASE_FILES}/etc/AutoBuild/Default_Variable ${GITHUB_ENV}
+		AddPackage git other AutoBuild-Packages Hyy2001X master
+		for i in ${GITHUB_ENV} $(PKG_Finder d package AutoBuild-Packages)/autoupdate/files/etc/autoupdate/default
 		do
 			cat >> ${i} <<EOF
 Author=${Author}
@@ -147,28 +143,14 @@ OP_REPO=${OP_REPO}
 OP_BRANCH=${OP_BRANCH}
 
 EOF
-		done
-		unset i
-		cat >> ${BASE_FILES}/etc/AutoBuild/Custom_Variable <<EOF
-## 请在下方输入你的自定义变量,一行只能填写一个变量
-## 该文件将在运行 AutoUpdate.sh 时被读取, 该文件中的变量优先级高于 Default_Variable
-## 示例:
-# Author=Hyy2001
-# TARGET_PROFILE=x86_64
-# Github=https://github.com/Hyy2001X/AutoBuild-Actions
-# Tmp_Path=/tmp/AutoUpdate
-# Log_Path=/tmp
-
-EOF
-		Copy ${Scripts}/AutoBuild_Tools.sh ${BASE_FILES}/bin
-		Copy ${Scripts}/AutoUpdate.sh ${BASE_FILES}/bin
-		AutoUpdate_Version=$(awk -F '=' '/Version/{print $2}' ${BASE_FILES}/bin/AutoUpdate.sh | awk 'NR==1')
-		AddPackage svn lean luci-app-autoupdate Hyy2001X/AutoBuild-Packages/trunk
+		done ; unset i
+		AutoUpdate_Version=$(awk -F '=' '/Version/{print $2}' $(PKG_Finder d package AutoBuild-Packages)/autoupdate/files/bin/autoupdate | awk 'NR==1')
+		Copy ${CustomFiles}/Depends/tools ${BASE_FILES}/bin
 		Copy ${CustomFiles}/Depends/profile ${BASE_FILES}/etc
 		Copy ${CustomFiles}/Depends/base-files-essential ${BASE_FILES}/lib/upgrade/keep.d
 		case "${OP_AUTHOR}/${OP_REPO}" in
 		coolsnowwolf/lede)
-			Copy ${CustomFiles}/Depends/coremark.sh ${Home}/$(PKG_Finder d "package feeds" coremark)
+			Copy ${CustomFiles}/Depends/coremark.sh $(PKG_Finder d "package feeds" coremark)
 			sed -i '\/etc\/firewall.user/d;/exit 0/d' ${Version_File}
 			cat >> ${Version_File} <<EOF
 
@@ -214,36 +196,38 @@ EOF
 		esac
 		sed -i "s?By?By ${Author}?g" ${CustomFiles}/Depends/banner
 		sed -i "s?Openwrt?Openwrt ${OP_VERSION} / AutoUpdate ${AutoUpdate_Version}?g" ${CustomFiles}/Depends/banner
-		if [[ -n ${Banner_Message} ]]
+		if [[ -n ${Default_Title} ]]
 		then
 			if [[ -n ${TARGET_FLAG} ]]
 			then
-				sed -i "s?Powered by AutoBuild-Actions?${Banner_Message} @ ${TARGET_FLAG}?g" ${CustomFiles}/Depends/banner
+				sed -i "s?Powered by AutoBuild-Actions?${Default_Title} @ ${TARGET_FLAG}?g" ${CustomFiles}/Depends/banner
 			else
-				sed -i "s?Powered by AutoBuild-Actions?${Banner_Message}?g" ${CustomFiles}/Depends/banner
+				sed -i "s?Powered by AutoBuild-Actions?${Default_Title}?g" ${CustomFiles}/Depends/banner
 			fi
 		fi
 		case "${OP_AUTHOR}/${OP_REPO}" in
 		immortalwrt/immortalwrt)
-			Copy ${CustomFiles}/Depends/banner ${Home}/$(PKG_Finder d package default-settings)/files openwrt_banner
+			Copy ${CustomFiles}/Depends/banner $(PKG_Finder d package default-settings)/files openwrt_banner
 		;;
 		*)
 			Copy ${CustomFiles}/Depends/banner ${BASE_FILES}/etc
 		;;
 		esac
 	fi
-	[[ -n ${Tempoary_IP} ]] && {
+	if [[ -n ${Tempoary_IP} ]]
+	then
 		ECHO "Using Tempoary IP Address: ${Tempoary_IP} ..."
 		Default_IP="${Tempoary_IP}"
-	}
-	[[ -n ${Default_IP} && ${Default_IP} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && {
+	fi
+	if [[ -n ${Default_IP} && ${Default_IP} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]
+	then
 		Old_IP=$(awk -F '[="]+' '/ipaddr:-/{print $3}' ${BASE_FILES}/bin/config_generate | awk 'NR==1')
 		if [[ ! ${Default_IP} == ${Old_IP} ]]
 		then
 			ECHO "Setting default IP Address to ${Default_IP} ..."
 			sed -i "s/${Old_IP}/${Default_IP}/g" ${BASE_FILES}/bin/config_generate
 		fi
-	}
+	fi
 	for X in $(ls -1 target/linux/generic | grep "config-")
 	do
 		sed -i '/CONFIG_FAT_DEFAULT_IOCHARSET/d' target/linux/generic/${X}
@@ -254,48 +238,7 @@ EOF
 
 Firmware_Diy_Other() {
 	ECHO "[Firmware_Diy_Other] Starting ..."
-	CD ${Home}
-	case "${INCLUDE_Original_OpenWrt_Compatible}" in
-	19.07)
-		OP_BRANCH=19.07
-		Force_mode=1
-		INCLUDE_Original_OpenWrt_Compatible=true
-	;;
-	21.02)
-		OP_BRANCH=21.02
-		Force_mode=1
-		INCLUDE_Original_OpenWrt_Compatible=true
-	;;
-	esac
-	if [[ ${INCLUDE_Original_OpenWrt_Compatible} == true ]]
-	then
-		if [[ ${OP_AUTHOR} =~ (openwrt|[Ll]ienol) || ${Force_mode} == 1 ]]
-		then
-			ECHO "Starting to run [Obsolete_Package_Compatible] Script ..."
-			case "${OP_BRANCH}" in
-			19.07 | 21.02 | main)
-				[[ ${OP_BRANCH} == main ]] && OP_BRANCH=21.02
-				cat >> ${CONFIG_TEMP} <<EOF
-
-# CONFIG_PACKAGE_dnsmasq is not set
-CONFIG_PACKAGE_dnsmasq-full=y
-# CONFIG_PACKAGE_wpad-wolfssl is not set
-CONFIG_PACKAGE_wpad-openssl=y
-EOF
-				Copy ${CustomFiles}/Patches/fix_upx-ucl-${OP_BRANCH}.patch ${Home}
-				cat fix_upx-ucl-${OP_BRANCH}.patch | patch -p1 > /dev/null 2>&1
-				AddPackage svn feeds/packages golang coolsnowwolf/packages/trunk/lang
-				ECHO "Starting to convert zh-cn translation files to zh_Hans ..."
-				cd package && bash ${Scripts}/Convert_Translation.sh && cd -
-			;;
-			*)
-				ECHO "[${OP_BRANCH}]: Current OP_BRANCH is not supported !"
-			;;
-			esac
-		else
-			ECHO "[${OP_AUTHOR}]: Current OP_AUTHOR is not supported !"
-		fi
-	fi
+	CD ${WORK}
 	if [[ -n ${Author_URL} ]]
 	then
 			cat >> ${CONFIG_TEMP} <<EOF
@@ -309,103 +252,108 @@ EOF
 
 Firmware_Diy_End() {
 	ECHO "[Firmware_Diy_End] Starting ..."
-	cd ${Home}
-	MKDIR ${Home}/bin/Firmware
-	Firmware_Path="${Home}/bin/targets/${TARGET_BOARD}/${TARGET_SUBTARGET}"
-	SHA256_File="${Firmware_Path}/sha256sums"
-	cd ${Firmware_Path}
-	echo -e "### FIRMWARE OUTPUT ###\n$(ls -1 | egrep -v "packages|buildinfo|sha256sums|manifest")\n"
+	cd ${WORK}
+	MKDIR ${WORK}/bin/Firmware
+	Fw_Path="${WORK}/bin/targets/${TARGET_BOARD}/${TARGET_SUBTARGET}"
+	cd ${Fw_Path}
+	echo -e "### FIRMWARE OUTPUT ###\n$(ls -1)\n"
 	case "${TARGET_BOARD}" in
 	x86)
-		[[ ${Checkout_Virtual_Images} == true ]] && {
-			Process_Firmware $(List_Format)
-		} || {
-			Process_Firmware ${Firmware_Format}
-		}
+		if [[ ${x86_Full_Images} == true ]]
+		then
+			Process_Fw $(List_MFormat)
+		else
+			Process_Fw ${Fw_MFormat}
+		fi
 	;;
 	*)
-		if [[ -n ${Firmware_Format} ]]
+		if [[ -n ${Fw_MFormat} ]]
 		then
-			Process_Firmware ${Firmware_Format}
+			Process_Fw ${Fw_MFormat}
 		else
-			Process_Firmware $(List_Format)
+			Process_Fw $(List_MFormat)
 		fi
 	;;
 	esac
-	[[ $(ls) =~ 'AutoBuild-' ]] && {
+	if [[ $(ls) =~ 'AutoBuild-' ]]
+	then
 		cd -
-		cp -a ${Firmware_Path}/AutoBuild-* bin/Firmware
-	}
+		cp -a ${Fw_Path}/AutoBuild-* bin/Firmware
+	fi
 	echo "[$(date "+%H:%M:%S")] Actions Avaliable: $(df -h | grep "/dev/root" | awk '{printf $4}')"
 	ECHO "[Firmware_Diy_End] Done"
 }
 
-Process_Firmware() {
+Process_Fw() {
 	while [[ $1 ]];do
-		Process_Firmware_Core $1 $(List_Firmware $1)
+		Process_Fw_Core $1 $(List_Fw $1 | Regex)
 		shift
 	done
 }
 
-Process_Firmware_Core() {
-	Firmware_Format_Defined=$1
+Process_Fw_Core() {
+	Fw_Format=$1
 	shift
 	while [[ $1 ]];do
-		Firmware=${AutoBuild_Firmware}
+		Fw=${AutoBuild_Fw}
 		case "${TARGET_BOARD}" in
 		x86)
-			[[ $1 =~ efi ]] && {
-				FW_Boot_Method=UEFI
-			} || FW_Boot_Method=BIOS
-			Firmware=${Firmware/BOOT/${FW_Boot_Method}}
+			[[ $1 =~ efi ]] && Fw_Boot=UEFI || Fw_Boot=BIOS
+			Fw=${Fw/BOOT/${Fw_Boot}}
 		;;
 		esac
-		Firmware=${Firmware/SHA256/$(Get_SHA256 $1)}
-		Firmware=${Firmware/FORMAT/${Firmware_Format_Defined}}
-		[[ -f $1 ]] && {
-			ECHO "Copying [$1] to [${Firmware}] ..."
-			cp -a $1 ${Firmware}
-		} || ECHO "Unable to access [${Firmware}] ..."
+		Fw=${Fw/SHA256/$(Get_sha256 $1)}
+		Fw=${Fw/FORMAT/${Fw_Format}}
+		if [[ -f $1 ]]
+		then
+			ECHO "Copying [$1] to [${Fw}] ..."
+			cp -a $1 ${Fw}
+		else
+			ECHO "Failed to copy [${Fw}] ..."
+		fi
 		shift
 	done
 }
 
-List_Firmware() {
-	[[ -z $* ]] && {
-		List_REGEX | while read X;do
+List_Fw() {
+	if [[ -z $* ]]
+	then
+		for X in $(List_sha256);do
 			echo ${X} | cut -d "*" -f2
 		done
-	} || {
+	else
 		while [[ $1 ]];do
-			for X in $(echo $(List_REGEX));do
+			for X in $(List_sha256);do
 				[[ ${X} == *$1 ]] && echo "${X}" | cut -d "*" -f2
 			done
 			shift
 		done
-	}
+	fi
 }
 
-List_Format() {
-	echo "$(List_REGEX | cut -d "*" -f2 | cut -d "." -f2-3)" | sort | uniq
+Regex() {
+	egrep -v "${Regex_Skip}"
 }
 
-List_REGEX() {
-	[[ -n ${REGEX_Skip_Checkout} ]] && {
-		egrep -v "${REGEX_Skip_Checkout}" ${SHA256_File} | tr -s '\n'
-	} || egrep -v "packages|buildinfo|sha256sums|manifest|kernel|rootfs|factory" ${SHA256_File} | tr -s '\n'
+List_sha256() {
+	cat ${Fw_Path}/sha256sums 2> /dev/null | Regex | tr -s '\n'
 }
 
-Get_SHA256() {
-	List_REGEX | grep "$1" | cut -c1-5
+List_MFormat() {
+	echo "$(List_sha256 | cut -d "*" -f2 | cut -d "." -f2-3)" | sort | uniq
 }
 
-GET_Branch() {
+Get_sha256() {
+	List_sha256 | grep $1 | awk '{print $1}' | cut -c1-5
+}
+
+Get_Branch() {
     git -C $(pwd) rev-parse --abbrev-ref HEAD | grep -v HEAD || \
     git -C $(pwd) describe --exact-match HEAD || \
     git -C $(pwd) rev-parse HEAD
 }
 
-if_IMG() {
+gz_Check() {
 	[[ $(cat ${CONFIG_TEMP}) =~ CONFIG_TARGET_IMAGES_GZIP=y ]] && {
 		echo img.gz
 	} || echo img
@@ -417,11 +365,12 @@ ECHO() {
 
 PKG_Finder() {
 	local Result
-	[[ $# -ne 3 ]] && {
+	if [[ $# -ne 3 ]]
+	then
 		ECHO "Usage: PKG_Finder <f | d> Search_Path Target_Name/Target_Path"
 		return 0
-	}
-	Result=$(find $2 -name $3 -type $1 -exec echo {} \;)
+	fi
+	Result=$(find $2 -name $3 -type $1 -exec echo {} \; 2> /dev/null)
 	[[ -n ${Result} ]] && echo "${Result}"
 }
 
@@ -441,10 +390,11 @@ MKDIR() {
 }
 
 AddPackage() {
-	[[ $# -lt 4 ]] && {
+	if [[ $# -lt 4 ]]
+	then
 		ECHO "Syntax error: [$#] [$*]"
 		return 0
-	}
+	fi
 	PKG_PROTO=$1
 	case "${PKG_PROTO}" in
 	git | svn)
@@ -463,17 +413,19 @@ AddPackage() {
 	[[ ${REPO_URL} =~ "${OP_AUTHOR}/${OP_REPO}" ]] && return 0
 
 	MKDIR ${PKG_DIR}
-	[[ -d ${PKG_DIR}/${PKG_NAME} ]] && {
+	if [[ -d ${PKG_DIR}/${PKG_NAME} ]]
+	then
 		ECHO "Removing old package: [${PKG_NAME}] ..."
 		rm -rf ${PKG_DIR}/${PKG_NAME}
-	}
+	fi
 	ECHO "Checking out package [${PKG_NAME}] to ${PKG_DIR} ..."
 	case "${PKG_PROTO}" in
 	git)
-		[[ -z ${REPO_BRANCH} ]] && {
+		if [[ -z ${REPO_BRANCH} ]]
+		then
 			ECHO "WARNING: Syntax missing <branch> ,using default branch: [master]"
 			REPO_BRANCH=master
-		}
+		fi
 		PKG_URL="$(echo ${REPO_URL}/${PKG_NAME} | sed s/[[:space:]]//g)"
 		git clone -b ${REPO_BRANCH} ${PKG_URL} ${PKG_NAME} > /dev/null 2>&1
 	;;
@@ -481,29 +433,34 @@ AddPackage() {
 		svn checkout ${REPO_URL}/${PKG_NAME} ${PKG_NAME} > /dev/null 2>&1
 	;;
 	esac
-	[[ -f ${PKG_NAME}/Makefile || -n $(ls -A ${PKG_NAME}) ]] && {
+	if [[ -f ${PKG_NAME}/Makefile || -n $(ls -A ${PKG_NAME}) ]]
+	then
 		mv -f "${PKG_NAME}" "${PKG_DIR}"
 		[[ $? == 0 ]] && ECHO "Done"
-	} || ECHO "Failed to download package ${PKG_NAME} ..."
+	else
+		ECHO "Failed to download package ${PKG_NAME} ..."
+	fi
 }
 
 Copy() {
-	[[ ! $# =~ [23] ]] && {
+	if [[ ! $# =~ [23] ]]
+	then
 		ECHO "Syntax error: [$#] [$*]"
 		return 0
-	}
-	[[ ! -f $1 ]] && [[ ! -d $1 ]] && {
+	fi
+	if [[ ! -f $1 && ! -d $1 ]]
+	then
 		ECHO "$1: No such file or directory ..."
 		return 0
-	}
+	fi
 	MKDIR $2
 	if [[ -z $3 ]]
 	then
-		ECHO "Copying $1 to $2 ..."
+		ECHO "[C] Copying $1 to $2 ..."
 		cp -a $1 $2
 	else
-		ECHO "Copying and renaming $1 to $2/$3 ..."
+		ECHO "[R] Copying $1 to $2/$3 ..."
 		cp -a $1 $2/$3
 	fi
-	[[ $? == 0 ]] && ECHO "Done" || ECHO "Failed"
+	[[ $? == 0 ]] && ECHO "Done"
 }

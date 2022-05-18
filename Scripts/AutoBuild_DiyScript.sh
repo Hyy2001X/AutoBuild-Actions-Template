@@ -6,17 +6,16 @@ Firmware_Diy_Core() {
 
 	Author=AUTO
 	Author_URL=AUTO
-	Default_FLAG=AUTO
+	Default_Flag=AUTO
 	Default_IP="192.168.1.1"
-	Banner_Message="Powered by AutoBuild-Actions"
+	Default_Title="Powered by AutoBuild-Actions"
 
-	Short_Firmware_Date=true
-	Checkout_Virtual_Images=false
-	Firmware_Format=AUTO
-	REGEX_Skip_Checkout="packages|buildinfo|sha256sums|manifest|kernel|rootfs|factory"
+	Short_Fw_Date=true
+	x86_Full_Images=false
+	Fw_Format=false
+	Regex_Skip="packages|buildinfo|sha256sums|manifest|kernel|rootfs|factory|itb|profile"
 
-	INCLUDE_AutoBuild_Features=true
-	INCLUDE_Original_OpenWrt_Compatible=false
+	AutoBuild_Features=true
 }
 
 Firmware_Diy() {
@@ -31,7 +30,7 @@ Firmware_Diy() {
 	# ${TARGET_BOARD}		设备架构
 	# ${TARGET_FLAG}		固件名称后缀
 
-	# ${Home}				OpenWrt 源码位置
+	# ${WORK}				OpenWrt 源码位置
 	# ${CONFIG_FILE}		使用的配置文件名称
 	# ${FEEDS_CONF}			OpenWrt 源码目录下的 feeds.conf.default 文件
 	# ${CustomFiles}		仓库中的 /CustomFiles 绝对路径
