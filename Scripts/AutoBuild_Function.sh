@@ -8,17 +8,17 @@ Firmware_Diy_Before() {
 	CONFIG_TEMP="${GITHUB_WORKSPACE}/openwrt/.config"
 	CD ${WORK}
 	Firmware_Diy_Core
-	[[ ${Short_Fw_Date} == true ]] && Compile_Date="$(echo ${Compile_Date} | cut -c1-8)"
+	[[ ${Short_Fw_Date} == true ]] && Compile_Date="$(cut -c1-8 <<< ${Compile_Date})"
 	Github="$(grep "https://github.com/[a-zA-Z0-9]" ${GITHUB_WORKSPACE}/.git/config | cut -c8-100 | sed 's/^[ \t]*//g')"
-	[[ -z ${Author} || ${Author} == AUTO ]] && Author="$(echo "${Github}" | cut -d "/" -f4)"
-	OP_AUTHOR="$(echo "${REPO_URL}" | cut -d "/" -f4)"
-	OP_REPO="$(echo "${REPO_URL}" | cut -d "/" -f5)"
+	[[ -z ${Author} || ${Author} == AUTO ]] && Author="$(cut -d "/" -f4 <<< ${Github})"
+	OP_AUTHOR="$(cut -d "/" -f4 <<< ${REPO_URL})"
+	OP_REPO="$(cut -d "/" -f5 <<< ${REPO_URL})"
 	OP_BRANCH="$(Get_Branch)"
 	if [[ ${OP_BRANCH} =~ (master|main) ]]
 	then
 		OP_VERSION_HEAD="R$(date +%y.%m)-"
 	else
-		OP_BRANCH="$(echo ${OP_BRANCH} | egrep -o "[0-9]+.[0-9]+" | awk 'NR==1')"
+		OP_BRANCH="$(egrep -o "[0-9]+.[0-9]+" <<< ${OP_BRANCH} | awk 'NR==1')"
 		OP_VERSION_HEAD="R${OP_BRANCH}-"
 	fi
 	case "${OP_AUTHOR}/${OP_REPO}" in
@@ -99,7 +99,6 @@ Firmware_Diy_Before() {
 WORK=${WORK}
 CONFIG_TEMP=${CONFIG_TEMP}
 AutoBuild_Features=${AutoBuild_Features}
-Compatible=${Compatible}
 x86_Full_Images=${x86_Full_Images}
 AutoBuild_Fw=${AutoBuild_Fw}
 CustomFiles=${GITHUB_WORKSPACE}/CustomFiles
@@ -128,6 +127,7 @@ Firmware_Diy_Main() {
 	if [[ ${AutoBuild_Features} == true ]]
 	then
 		AddPackage git other AutoBuild-Packages Hyy2001X master
+		echo -e "\nCONFIG_PACKAGE_luci-app-autoupdate=y" >> ${CONFIG_FILE}
 		for i in ${GITHUB_ENV} $(PKG_Finder d package AutoBuild-Packages)/autoupdate/files/etc/autoupdate/default
 		do
 			cat >> ${i} <<EOF
@@ -152,31 +152,6 @@ EOF
 		coolsnowwolf/lede)
 			Copy ${CustomFiles}/Depends/coremark.sh $(PKG_Finder d "package feeds" coremark)
 			sed -i '\/etc\/firewall.user/d;/exit 0/d' ${Version_File}
-			cat >> ${Version_File} <<EOF
-
-sed -i '/check_signature/d' /etc/opkg.conf
-
-sed -i 's/\"services\"/\"nas\"/g' /usr/lib/lua/luci/controller/aliyundrive-webdav.lua
-sed -i 's/services/nas/g' /usr/lib/lua/luci/view/aliyundrive-webdav/aliyundrive-webdav_log.htm
-sed -i 's/services/nas/g' /usr/lib/lua/luci/view/aliyundrive-webdav/aliyundrive-webdav_status.htm
-
-sed -i 's/\"services\"/\"vpn\"/g' /usr/lib/lua/luci/controller/v2ray_server.lua
-sed -i 's/\"services\"/\"vpn\"/g' /usr/lib/lua/luci/model/cbi/v2ray_server/index.lua
-sed -i 's/\"services\"/\"vpn\"/g' /usr/lib/lua/luci/model/cbi/v2ray_server/user.lua
-sed -i 's/services/vpn/g' /usr/lib/lua/luci/view/v2ray_server/log.htm
-sed -i 's/services/vpn/g' /usr/lib/lua/luci/view/v2ray_server/users_list_status.htm
-sed -i 's/services/vpn/g' /usr/lib/lua/luci/view/v2ray_server/users_list_status.htm
-sed -i 's/services/vpn/g' /usr/lib/lua/luci/view/v2ray_server/v2ray.htm
-
-if [ -z "\$(grep "REDIRECT --to-ports 53" /etc/firewall.user 2> /dev/null)" ]
-then
-	echo '#iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53' >> /etc/firewall.user
-	echo '#iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53' >> /etc/firewall.user
-	echo '#[ -n "\$(command -v ip6tables)" ] && ip6tables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53' >> /etc/firewall.user
-	echo '#[ -n "\$(command -v ip6tables)" ] && ip6tables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53' >> /etc/firewall.user
-fi
-exit 0
-EOF
 			if [[ -n ${TARGET_FLAG} ]]
 			then
 				sed -i "s?${zzz_Default_Version}?${TARGET_FLAG} ${zzz_Default_Version} @ ${Author} [${Display_Date}]?g" ${Version_File}
@@ -228,25 +203,84 @@ EOF
 			sed -i "s/${Old_IP}/${Default_IP}/g" ${BASE_FILES}/bin/config_generate
 		fi
 	fi
-	for X in $(ls -1 target/linux/generic | grep "config-")
-	do
-		sed -i '/CONFIG_FAT_DEFAULT_IOCHARSET/d' target/linux/generic/${X}
-		echo -e '\nCONFIG_FAT_DEFAULT_IOCHARSET="utf8"' >> target/linux/generic/${X}
-	done
 	ECHO "[Firmware_Diy_Main] Done"
 }
 
 Firmware_Diy_Other() {
 	ECHO "[Firmware_Diy_Other] Starting ..."
 	CD ${WORK}
-	if [[ -n ${Author_URL} ]]
+	if [[ ${AutoBuild_Features} == true ]]
 	then
+		if [[ -n ${Author_URL} ]]
+		then
 			cat >> ${CONFIG_TEMP} <<EOF
 
 CONFIG_KERNEL_BUILD_USER="${Author}"
 CONFIG_KERNEL_BUILD_DOMAIN="${Author_URL}"
 EOF
+		fi
+		for i in $(du -ah ${CustomFiles}/Patches | awk '{print $2}' | sort | uniq)
+		do
+			if [[ -f $i ]]
+			then
+				if [[ $i =~ "-generic.patch" ]]
+				then
+					ECHO "Found generic patch file: $i"
+					patch < $i -p1 -d ${WORK}
+				elif [[ $i =~ "-${TARGET_BOARD}.patch" ]]
+				then
+					ECHO "Found board ${TARGET_BOARD} patch file: $i"
+					patch < $i -p1 -d ${WORK}
+				elif [[ $i =~ "-${TARGET_PROFILE}.patch" ]]
+				then
+					ECHO "Found profile ${TARGET_PROFILE} patch file: $i"
+					patch < $i -p1 -d ${WORK}
+				fi
+			fi
+		done ; unset i
+		Kconfig_Path=${CustomFiles}/Kconfig
+		Tree=${WORK}/target/linux
+		cd ${Kconfig_Path}
+		for i in $(du -a | awk '{print $2}' | busybox sed -r 's/.\//\1/' | grep -wv '^.' | sort | uniq)
+		do
+			if [[ -d $i && $(ls -1 $i 2> /dev/null) ]]
+			then
+				:
+			elif [[ -e $i ]]
+			then
+				_Kconfig=$(dirname $i)
+				__Kconfig=$(basename $i)
+				ECHO " - Found Kconfig_file: ${__Kconfig} at ${_Kconfig}"
+				if [[ -e ${Tree}/$i && ${__Kconfig} != config-generic ]]
+				then
+					ECHO " -- Found Tree: ${Tree}/$i, refreshing ${Tree}/$i ..."
+					echo >> ${Tree}/$i
+					if [[ $? == 0 ]]
+					then
+						cat $i >> ${Tree}/$i
+						ECHO " --- Done"
+					else
+						ECHO " --- Failed to write new content ..."
+					fi
+				elif [[ ${__Kconfig} == config-generic ]]
+				then
+					for j in $(ls -1 ${Tree}/${_Kconfig} | egrep "config-[0-9]+")
+					do
+						ECHO " -- Generic Kconfig_file, refreshing ${Tree}/${_Kconfig}/$j ..."
+						echo >> ${Tree}/${_Kconfig}/$j
+						if [[ $? == 0 ]]
+						then
+							cat $i >> ${Tree}/${_Kconfig}/$j
+							ECHO " --- Done"
+						else
+							ECHO " --- Failed to write new content ..."
+						fi
+					done
+				fi
+			fi
+		done ; unset i
 	fi
+	CD ${WORK}
 	ECHO "[Firmware_Diy_Other] Done"
 }
 
@@ -280,7 +314,7 @@ Firmware_Diy_End() {
 		cd -
 		cp -a ${Fw_Path}/AutoBuild-* bin/Firmware
 	fi
-	echo "[$(date "+%H:%M:%S")] Actions Avaliable: $(df -h | grep "/dev/root" | awk '{printf $4}')"
+	ECHO "[$(date "+%H:%M:%S")] Actions Avaliable: $(df -h | grep "/dev/root" | awk '{printf $4}')"
 	ECHO "[Firmware_Diy_End] Done"
 }
 
@@ -319,12 +353,12 @@ List_Fw() {
 	if [[ -z $* ]]
 	then
 		for X in $(List_sha256);do
-			echo ${X} | cut -d "*" -f2
+			cut -d "*" -f2 <<< "${X}"
 		done
 	else
 		while [[ $1 ]];do
 			for X in $(List_sha256);do
-				[[ ${X} == *$1 ]] && echo "${X}" | cut -d "*" -f2
+				[[ ${X} == *$1 ]] && cut -d "*" -f2 <<< "${X}"
 			done
 			shift
 		done
@@ -340,7 +374,7 @@ List_sha256() {
 }
 
 List_MFormat() {
-	echo "$(List_sha256 | cut -d "*" -f2 | cut -d "." -f2-3)" | sort | uniq
+	List_sha256 | cut -d "*" -f2 | cut -d "." -f2-3 | sort | uniq
 }
 
 Get_sha256() {

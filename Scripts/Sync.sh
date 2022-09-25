@@ -1,9 +1,8 @@
 #!/bin/bash
 # AutoBuild Module by Hyy2001 <https://github.com/Hyy2001X/AutoBuild-Actions>
 # Thanks to 281677160 and TobKed
-# Sync
 
-# 上游仓库与分支
+# 上游仓库与分支, 按需修改
 INPUT_UPSTREAM_REPOSITORY=Hyy2001X/AutoBuild-Actions-Template
 INPUT_UPSTREAM_BRANCH=master
 
@@ -13,15 +12,13 @@ Sync_List=(
 	# Configs/*
 	CustomFiles/Depends/*
 	CustomFiles/Patches/*
+	CustomFiles/Kconfig/*
 	# Scripts/AutoBuild_DiyScript.sh
-	# Scripts/Sync.sh
+	Scripts/Sync.sh
 	Scripts/AutoBuild_Function.sh
-	Scripts/AutoUpdate.sh
-	Scripts/AutoBuild_Tools.sh
-	Scripts/Convert_Translation.sh
-	# LICENSE
+	LICENSE
 	README.md
-	)
+)
 
 set -e
 

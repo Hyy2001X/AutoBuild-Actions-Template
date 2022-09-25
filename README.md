@@ -4,17 +4,7 @@
 
 支持的 OpenWrt 源码: `coolsnowwolf/lede`、`immortalwrt/immortalwrt`、`openwrt/openwrt`、`lienol/openwrt`
 
-## 维护设备列表
-
-| 机型 | 配置文件 | 自用 | 是否发布 |
-| :----: | :----: | :----: | :----: |
-| [x86_64](./.github/workflows/AutoBuild-x86_64.yml) | [x86_64](./Configs/x86_64) | ✅ | ❎ |
-| [新路由3](./.github/workflows/AutoBuild-d-team_newifi-d2.yml) | [d-team_newifi-d2](./Configs/d-team_newifi-d2) | ✅ | ✅ |
-| [华硕 acrh17](./.github/workflows/AutoBuild-asus_rt-acrh17.yml) | [asus_rt-acrh17](./Configs/asus_rt-acrh17) | ❎ | ❎ |
-| [竞斗云 2.0](./.github/workflows/AutoBuild-p2w_r619ac-128m.yml) | [p2w_r619ac-128m](./Configs/p2w_r619ac-128m) | ❎ | ❎ |
-| [红米 AC2100](./.github/workflows/AutoBuild-xiaomi_redmi-router-ac2100.yml) | [xiaomi_redmi-router-ac2100](./Configs/xiaomi_redmi-router-ac2100) | ❎ | ❎ |
-| [小娱C1/3/5](./.github/workflows/AutoBuild-xiaoyu_xy-c5.yml) | [xiaoyu_xy-c5](./Configs/xiaoyu_xy-c5) | ❎ | ✅ |
-| [红米 AX6S](./.github/workflows/AutoBuild-xiaomi_redmi-router-ax6s.yml) | [xiaomi_redmi-router-ax6s](./Configs/xiaomi_redmi-router-ax6s) | ✅ | ❎ |
+🔔 **Not a DaLao , just an User.**
 
 ## 一、定制固件(可选)
 
@@ -40,11 +30,13 @@
 ```
    Author 作者名称, AUTO: [自动识别]
    
-   Author_URL 自定义作者网站或域名, 将写入到内核信息, 例如 AUTO: [自动识别]; "https://www.baidu.com"
+   Author_URL 自定义作者网站或域名, AUTO: [自动识别]
+
+   Default_Flag 固件标签 (名称后缀), 适用不同配置文件, AUTO: [自动识别]
 
    Default_Title Shell 终端首页显示的额外信息
 
-   Default_IP 固件初始 IP 地址
+   Default_IP 固件 IP 地址
 
    Short_Fw_Date 简短的固件日期, 例如 true: [20210601]; false: [202106012359]
 
@@ -99,6 +91,8 @@
    强制下载并刷写固件: `autoupdate -f`
 
    更新脚本: `autoupdate -x`
+   
+   打印运行日志:  `autoupdate --log`
 
    列出相关信息: `autoupdate --list`
 
