@@ -4,27 +4,35 @@
 
 支持的 OpenWrt 源码: `coolsnowwolf/lede`、`immortalwrt/immortalwrt`、`openwrt/openwrt`、`lienol/openwrt`
 
+   🎈 **提示**: 文档中的 **TARGET_PROFILE** 为编译的设备名称(代号), 例如: `d-team_newifi-d2`、`asus_rt-acrh17`、`x86_64`
+   
+   **TARGET_PROFILE** 本地获取方法如下:
+   
+   ① 执行`make menuconfig`, 进行设备选择后即可保存并退出
+   
+   ② 在源码目录执行`egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
+   
+   或`grep 'TARGET_PROFILE' .config` 均可获取 **TARGET_PROFILE**
+
+   🔔 **为了你的账号安全, 请不要使用 SSH 连接 Github Action**, `.config`配置以及固件定制等操作请务必在本地完成 🔔
+
 ## 一、定制固件(可选)
 
-   🎈 **提示**: 文中的 **TARGET_PROFILE** 为要编译的设备名称, 例如: `d-team_newifi-d2`、`asus_rt-acrh17`
+1. **Fork** 该仓库, 并进入你自己的`AutoBuild-Actions`仓库, **下方所有操作都将在你的`AutoBuild-Actions`仓库下进行**, 可以 **Clone** 到本地操作
 
-   从本地获取: 在源码目录执行`egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
+   建议使用`Github Desktop`或`Notepad--`进行编辑和提交操作 [[Github Desktop](https://desktop.github.com/)] [[Notepad--]([https://notepad-plus-plus.org/downloads/](https://gitee.com/cxasm/notepad--/releases/tag/v2.11))]
+
+2. 编辑`Configs`目录下的配置文件, 配置文件的命名一般为**TARGET_PROFILE**, 若配置文件不存在则需要在本地生成并上传
+
+3. 编辑`.github/workflows/***.yml`文件, 修改`第 7 行 name:`, 填写一个便于识别的名称 `e.g. NEWIFI D2`
+
+4. 编辑`.github/workflows/***.yml`文件, 修改`第 32 行 CONFIG_FILE:`, 填写你添加到`Configs`目录下的配置名称
+
+5. 根据需求编辑 [Scripts/AutoBuild_DiyScript.sh](./Scripts/AutoBuild_DiyScript.sh)
    
-   或执行`grep 'TARGET_PROFILE' .config`, 请先执行`make menuconfig`进行配置
+添加软件包、其他定制选项请在 `Firmware_Diy()` 函数中编写, `Scripts`目录下的其他文件无需修改
 
-1. 进入你的`AutoBuild-Actions`仓库, **下方所有操作都将在你的`AutoBuild-Actions`仓库下进行**
-
-   建议使用`Github Desktop`和`Notepad++`进行操作 [[Github Desktop](https://desktop.github.com/)] [[Notepad++](https://notepad-plus-plus.org/downloads/)]
-
-2. 编辑`/Configs`目录下的配置文件, 若配置文件不存在则需要在本地生成`.config`重命名并上传
-
-3. 编辑`/.github/workflows/某设备.yml`文件, 修改`第 7 行`为随便的名称
-
-4. 编辑`/.github/workflows/某设备.yml`文件, 修改`第 32 行`为上传的`.config`配置文件名称
-
-5. 按照需求且编辑 [/Scripts/AutoBuild_DiyScript.sh](./Scripts/AutoBuild_DiyScript.sh), `/Scripts`下的其他文件无需修改
-
-**/Scripts/AutoBuild_DiyScript.sh: Firmware_Diy_Core() 函数中的变量解释:**
+**Scripts/AutoBuild_DiyScript.sh: Firmware_Diy_Core() 函数中的变量:**
 ```
    Author 作者名称, AUTO: [自动识别]
    
@@ -32,37 +40,42 @@
 
    Default_Flag 固件标签 (名称后缀), 适用不同配置文件, AUTO: [自动识别]
 
-   Default_Title Shell 终端首页显示的额外信息
-
    Default_IP 固件 IP 地址
 
-   Short_Fw_Date 简短的固件日期, 例如 true: [20210601]; false: [202106012359]
+   Default_Title 终端首页显示的额外信息
 
-   x86_Full_Images 额外上传已检测到的 x86 虚拟磁盘镜像
+   Short_Fw_Date 简短的固件日期, true: [20210601]; false: [202106012359]
+
+   x86_Full_Images 额外上传已检测到的 x86 虚拟磁盘镜像, true: [上传]; false: [不上传]
    
-   Fw_Format 自定义固件格式; false: [自动识别]
+   Fw_MFormat 自定义固件格式; false: [自动识别]
 
    Regex_Skip 输出固件时丢弃包含该内容的文件
 
-   AutoBuild_Features 自动添加 AutoBuild 固件特性, 例如 一键更新固件; 固件工具箱
+   AutoBuild_Features 自动添加 AutoBuild 固件特性, 建议开启
 
    注: 禁用某功能请将变量值修改为 false, 开启则为 true
 
 ```
 
-## 二、编译固件(必选)
+## 二、编译固件
 
-   **手动编译** 点击上方`Actions`, 在左栏选择要编译的设备,点击右方`Run workflow`再点击`绿色按钮`即可开始编译
+   **手动编译** 点击上方工具栏中的`Actions`选项, 在左侧选择设备,点击右方`Run workflow`再点击`绿色按钮`即可开始编译
 
-   **一键编译** 删除`第 29-30 行`的注释并保存, 以后点击两次右上角的 **Star** 按钮即可一键编译
+   **Star 一键编译** 编辑`.github/workflows/***.yml`文件, 删除注释`#`符号并提交修改, 单击或双击点亮右上角的 **Star** ⭐按钮即可一键编译
 
-   **定时编译** 删除`第 26-27 行`的注释, 然后按需修改时间并提交修改 [Corn 使用方法](https://www.runoob.com/w3cnote/linux-crontab-tasks.html)
-
+```
+  #watch:
+  #  types: [started]
+```
+   **定时编译** 编辑`.github/workflows/***.yml`文件, 删除注释`#`符号, 并按需修改时间并提交修改 [Corn 使用方法](https://www.runoob.com/w3cnote/linux-crontab-tasks.html)
+```
+  #schedule:
+  #  - cron: 0 8 * * 5
+```
    **临时修改固件 IP 地址** 该功能仅在**手动编译**生效, 点击`Run workflow`后即可输入 IP 地址
    
-   **使用其他 [.config] 配置文件** 点击`Run workflow`后即可输入位于`/Configs`下的配置文件名称
-
-   🔔 **为了你的账号安全, 请不要使用 SSH 连接 Github Action**, `.config`配置以及固件定制等操作请务必在本地完成 🔔
+   **使用其他 [.config] 配置文件** 点击`Run workflow`后即可选择`Configs`目录下的配置文件名称
 
 ## 三、部署云端日志(可选)
 
@@ -74,7 +87,7 @@
 
 4. 在本地执行`autoupdate --fw-log`测试
 
-## 使用一键更新固件脚本
+## 使用一键更新固件脚本(可选)
 
    首先需要打开`TTYD 终端`或者使用`SSH`, 按需输入下方指令:
 
@@ -100,7 +113,7 @@
 
    **注意:** 部分参数可一起使用, 例如 `autoupdate -n -P -F --path /mnt/sda1`
 
-## 使用 tools 固件工具箱
+## 使用 tools 固件工具箱(可选)
 
    打开`TTYD 终端`或者使用`SSH`, 执行指令`tools`即可启动固件工具箱
 
