@@ -48,7 +48,7 @@
 
    x86_Full_Images 额外上传已检测到的 x86 虚拟磁盘镜像, true: [上传]; false: [不上传]
    
-   Fw_MFormat 自定义固件格式; false: [自动识别]
+   Fw_MFormat 自定义固件格式, AUTO: [自动识别]
 
    Regex_Skip 输出固件时丢弃包含该内容的文件
 
