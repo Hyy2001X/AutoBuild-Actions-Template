@@ -1,5 +1,5 @@
 #!/bin/bash
-# AutoBuild Module by Hyy2001 <https://github.com/Hyy2001X/AutoBuild-Actions>
+# AutoBuild Module by Hyy2001 <https://github.com/Hyy2001X/AutoBuild-Actions-BETA>
 # AutoBuild DiyScript
 
 Firmware_Diy_Core() {
@@ -24,7 +24,12 @@ Firmware_Diy_Core() {
 	Regex_Skip="packages|buildinfo|sha256sums|manifest|kernel|rootfs|factory|itb|profile|ext4|json"
 	# 输出固件时丢弃包含该内容的固件/文件
 	AutoBuild_Features=true
-	# 自动添加 AutoBuild 固件特性, true: [开启]; false: [关闭]
+	# 添加 AutoBuild 固件特性, true: [开启]; false: [关闭]
+	
+	AutoBuild_Features_Patch=false
+	# 保持默认
+	AutoBuild_Features_Kconfig=false
+	# 保持默认
 }
 
 Firmware_Diy() {
@@ -33,19 +38,20 @@ Firmware_Diy() {
 
 	# 可用预设变量, 其他可用变量请参考运行日志
 	# ${OP_AUTHOR}			OpenWrt 源码作者
-	# ${OP_REPO}			OpenWrt 仓库名称
+	# ${OP_REPO}				OpenWrt 仓库名称
 	# ${OP_BRANCH}			OpenWrt 源码分支
 	# ${TARGET_PROFILE}		设备名称
-	# ${TARGET_BOARD}		设备架构
-	# ${TARGET_FLAG}		固件名称后缀
+	# ${TARGET_BOARD}			设备架构
+	# ${TARGET_FLAG}			固件名称后缀
 
 	# ${WORK}				OpenWrt 源码位置
-	# ${CONFIG_FILE}		使用的配置文件名称
+	# ${CONFIG_FILE}			使用的配置文件名称
 	# ${FEEDS_CONF}			OpenWrt 源码目录下的 feeds.conf.default 文件
-	# ${CustomFiles}		仓库中的 /CustomFiles 绝对路径
-	# ${Scripts}			仓库中的 /Scripts 绝对路径
+	# ${CustomFiles}			仓库中的 /CustomFiles 绝对路径
+	# ${Scripts}				仓库中的 /Scripts 绝对路径
 	# ${FEEDS_LUCI}			OpenWrt 源码目录下的 package/feeds/luci 目录
 	# ${FEEDS_PKG}			OpenWrt 源码目录下的 package/feeds/packages 目录
 	# ${BASE_FILES}			OpenWrt 源码目录下的 package/base-files/files 目录
+
 	:
 }

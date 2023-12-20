@@ -2,8 +2,8 @@
 # AutoBuild Module by Hyy2001 <https://github.com/Hyy2001X/AutoBuild-Actions-BETA>
 # AutoBuild Functions
 
-Firmware_Diy_Before() {
-	ECHO "[Firmware_Diy_Before] Starting ..."
+Firmware_Diy_Start() {
+	ECHO "[Firmware_Diy_Start] Starting ..."
 	WORK="${GITHUB_WORKSPACE}/openwrt"
 	CONFIG_TEMP="${GITHUB_WORKSPACE}/openwrt/.config"
 	CD ${WORK}
@@ -117,7 +117,7 @@ ENV_FILE=${GITHUB_ENV}
 EOF
 	source ${GITHUB_ENV}
 	echo -e "### VARIABLE LIST ###\n$(cat ${GITHUB_ENV})\n"
-	ECHO "[Firmware_Diy_Before] Done"
+	ECHO "[Firmware_Diy_Start] Done"
 }
 
 Firmware_Diy_Main() {
@@ -181,9 +181,6 @@ EOF
 			fi
 		fi
 		case "${OP_AUTHOR}/${OP_REPO}" in
-		immortalwrt/immortalwrt)
-			Copy ${CustomFiles}/Depends/banner $(PKG_Finder d package default-settings)/files openwrt_banner
-		;;
 		*)
 			Copy ${CustomFiles}/Depends/banner ${BASE_FILES}/etc
 		;;
@@ -219,71 +216,91 @@ CONFIG_KERNEL_BUILD_USER="${Author}"
 CONFIG_KERNEL_BUILD_DOMAIN="${Author_URL}"
 EOF
 		fi
-		if [[ -d ${CustomFiles}/Patches ]]
+		if [[ ${AutoBuild_Features_Patch} == true ]]
 		then
-			for i in $(du -ah ${CustomFiles}/Patches | awk '{print $2}' | sort | uniq)
-			do
-				if [[ -f $i ]]
-				then
-					if [[ $i =~ "-generic.patch" ]]
+			case "${OP_AUTHOR}/${OP_REPO}:${OP_BRANCH}" in
+			coolsnowwolf/lede:master)
+				Patch_Path=${CustomFiles}/Patches/coolsnowwolf-lede
+			;;
+			immortalwrt/immortalwrt*)
+				Patch_Path=${CustomFiles}/Patches/immortalwrt-immortalwrt
+			;;
+			lienol/openwrt*)
+				Patch_Path=${CustomFiles}/Patches/lienol-openwrt
+			;;
+			openwrt/openwrt*)
+				Patch_Path=${CustomFiles}/Patches/openwrt-openwrt
+			;;
+			esac
+			if [[ -d ${Patch_Path} ]]
+			then
+				for i in $(du -ah ${Patch_Path} | awk '{print $2}' | sort | uniq)
+				do
+					if [[ -f $i ]]
 					then
-						ECHO "Found generic patch file: $i"
-						patch < $i -p1 -d ${WORK}
-					elif [[ $i =~ "-${TARGET_BOARD}.patch" ]]
-					then
-						ECHO "Found board ${TARGET_BOARD} patch file: $i"
-						patch < $i -p1 -d ${WORK}
-					elif [[ $i =~ "-${TARGET_PROFILE}.patch" ]]
-					then
-						ECHO "Found profile ${TARGET_PROFILE} patch file: $i"
-						patch < $i -p1 -d ${WORK}
-					fi
-				fi
-			done ; unset i
-		fi
-		Kconfig_Path=${CustomFiles}/Kconfig
-		Tree=${WORK}/target/linux
-		if [[ -d ${Kconfig_Path} ]]
-		then
-			cd ${Kconfig_Path}
-			for i in $(du -a | awk '{print $2}' | busybox sed -r 's/.\//\1/' | grep -wv '^.' | sort | uniq)
-			do
-				if [[ -d $i && $(ls -1 $i 2> /dev/null) ]]
-				then
-					:
-				elif [[ -e $i ]]
-				then
-					_Kconfig=$(dirname $i)
-					__Kconfig=$(basename $i)
-					ECHO " - Found Kconfig_file: ${__Kconfig} at ${_Kconfig}"
-					if [[ -e ${Tree}/$i && ${__Kconfig} != config-generic ]]
-					then
-						ECHO " -- Found Tree: ${Tree}/$i, refreshing ${Tree}/$i ..."
-						echo >> ${Tree}/$i
-						if [[ $? == 0 ]]
+						if [[ $i =~ "-generic.patch" ]]
 						then
-							cat $i >> ${Tree}/$i
-							ECHO " --- Done"
-						else
-							ECHO " --- Failed to write new content ..."
+							ECHO "Found generic patch file: $i"
+							patch < $i -p1 -d ${WORK}
+						elif [[ $i =~ "-${TARGET_BOARD}.patch" ]]
+						then
+							ECHO "Found board ${TARGET_BOARD} patch file: $i"
+							patch < $i -p1 -d ${WORK}
+						elif [[ $i =~ "-${TARGET_PROFILE}.patch" ]]
+						then
+							ECHO "Found profile ${TARGET_PROFILE} patch file: $i"
+							patch < $i -p1 -d ${WORK}
 						fi
-					elif [[ ${__Kconfig} == config-generic ]]
+					fi
+				done ; unset i
+			fi
+		fi
+		if [[ ${AutoBuild_Features_Kconfig} == true ]]
+		then
+			Kconfig_Path=${CustomFiles}/Kconfig
+			Tree=${WORK}/target/linux
+			if [[ -d ${Kconfig_Path} ]]
+			then
+				cd ${Kconfig_Path}
+				for i in $(du -a | awk '{print $2}' | busybox sed -r 's/.\//\1/' | grep -wv '^.' | sort | uniq)
+				do
+					if [[ -d $i && $(ls -1 $i 2> /dev/null) ]]
 					then
-						for j in $(ls -1 ${Tree}/${_Kconfig} | egrep "config-[0-9]+")
-						do
-							ECHO " -- Generic Kconfig_file, refreshing ${Tree}/${_Kconfig}/$j ..."
-							echo >> ${Tree}/${_Kconfig}/$j
+						:
+					elif [[ -e $i ]]
+					then
+						_Kconfig=$(dirname $i)
+						__Kconfig=$(basename $i)
+						ECHO " - Found Kconfig_file: ${__Kconfig} at ${_Kconfig}"
+						if [[ -e ${Tree}/$i && ${__Kconfig} != config-generic ]]
+						then
+							ECHO " -- Found Tree: ${Tree}/$i, refreshing ${Tree}/$i ..."
+							echo >> ${Tree}/$i
 							if [[ $? == 0 ]]
 							then
-								cat $i >> ${Tree}/${_Kconfig}/$j
+								cat $i >> ${Tree}/$i
 								ECHO " --- Done"
 							else
 								ECHO " --- Failed to write new content ..."
 							fi
-						done
+						elif [[ ${__Kconfig} == config-generic ]]
+						then
+							for j in $(ls -1 ${Tree}/${_Kconfig} | egrep "config-[0-9]+")
+							do
+								ECHO " -- Generic Kconfig_file, refreshing ${Tree}/${_Kconfig}/$j ..."
+								echo >> ${Tree}/${_Kconfig}/$j
+								if [[ $? == 0 ]]
+								then
+									cat $i >> ${Tree}/${_Kconfig}/$j
+									ECHO " --- Done"
+								else
+									ECHO " --- Failed to write new content ..."
+								fi
+							done
+						fi
 					fi
-				fi
-			done ; unset i
+				done ; unset i
+			fi
 		fi
 	fi
 	CD ${WORK}
@@ -407,7 +424,7 @@ PKG_Finder() {
 	local Result
 	if [[ $# -ne 3 ]]
 	then
-		ECHO "Usage: PKG_Finder <f | d> Search_Path Target_Name/Target_Path"
+		ECHO "Syntax error: [$#] [$*]"
 		return 0
 	fi
 	Result=$(find $2 -name $3 -type $1 -exec echo {} \; 2> /dev/null)
@@ -420,10 +437,22 @@ CD() {
 }
 
 MKDIR() {
-	while [[ $1 ]];do
+	while [[ $1 ]]
+	do
+		if [[ ! -d $(dirname $1) ]]
+		then
+			mkdir -p $(dirname $1)
+			if [[ $? != 0 ]]
+			then
+				ECHO "Failed to create parent directory: [$(dirname $1)] ..."
+				return 0
+			fi
+		fi
 		if [[ ! -d $1 ]]
 		then
-			mkdir -p $1 || ECHO "Failed to create target directory: [$1] ..."
+			mkdir -p $1 || ECHO "Failed to create sub directory: [$1] ..."
+		else
+			ECHO "Create directory: [$(dirname $1)] ..."
 		fi
 		shift
 	done
@@ -441,7 +470,6 @@ AddPackage() {
 		:
 	;;
 	*)
-		ECHO "Unknown content: ${PKG_PROTO}"
 		return 0
 	;;
 	esac
@@ -458,16 +486,15 @@ AddPackage() {
 		ECHO "Removing old package: [${PKG_NAME}] ..."
 		rm -rf ${PKG_DIR}/${PKG_NAME}
 	fi
-	ECHO "Checking out package [${PKG_NAME}] to ${PKG_DIR} ..."
+	ECHO "Downloading package [${PKG_NAME}] to ${PKG_DIR} ..."
 	case "${PKG_PROTO}" in
 	git)
 		if [[ -z ${REPO_BRANCH} ]]
 		then
-			ECHO "WARNING: Syntax missing <branch> ,using default branch: [master]"
 			REPO_BRANCH=master
 		fi
 		PKG_URL="$(echo ${REPO_URL}/${PKG_NAME} | sed s/[[:space:]]//g)"
-		git clone -b ${REPO_BRANCH} ${PKG_URL} ${PKG_NAME} > /dev/null 2>&1
+		git clone -b ${REPO_BRANCH} ${PKG_URL} ${PKG_NAME} --depth 1  > /dev/null 2>&1
 	;;
 	svn)
 		svn checkout ${REPO_URL}/${PKG_NAME} ${PKG_NAME} > /dev/null 2>&1
@@ -477,8 +504,6 @@ AddPackage() {
 	then
 		mv -f "${PKG_NAME}" "${PKG_DIR}"
 		[[ $? == 0 ]] && ECHO "Done"
-	else
-		ECHO "Failed to download package ${PKG_NAME} ..."
 	fi
 }
 
@@ -496,11 +521,64 @@ Copy() {
 	MKDIR $2
 	if [[ -z $3 ]]
 	then
-		ECHO "[C] Copying $1 to $2 ..."
+		ECHO "[C] Copying $(basename $1) to $2 ..."
 		cp -a $1 $2
 	else
-		ECHO "[R] Copying $1 to $2/$3 ..."
+		ECHO "[R] Copying $(basename $1) to $2 [$3] ..."
 		cp -a $1 $2/$3
 	fi
 	[[ $? == 0 ]] && ECHO "Done"
+}
+
+ReleaseDL() {
+	if [[ $# -lt 3 ]]
+	then
+		ECHO "Syntax error: [$#] [$*]"
+		return 0
+	fi
+	
+	API_URL=$1
+	FILE_NAME=$2
+	TARGET_FILE_PATH=$3
+	TARGET_FILE_RENAME=$4
+	API_FILE=/tmp/API.json
+	
+	if [[ ! -d ${TARGET_FILE_PATH} ]]
+	then
+		MKDIR "${TARGET_FILE_PATH}"
+	fi
+	
+	rm -f ${API_FILE}
+	wget --quiet --no-check-certificate --tries 5 --timeout 20 $1 -O ${API_FILE}
+	if [[ $? != 0 || ! -f ${API_FILE} ]]
+	then
+		ECHO "Failed to download API ${PKG_NAME} ..."
+	fi
+	for i in $(seq 0 $(cat ${API_FILE} | jq ".assets | length" 2> /dev/null))
+	do
+		eval name=$(cat ${API_FILE} | jq ".assets[${i}].name" 2> /dev/null)
+		[[ ${name} == null ]] && continue
+		case "$name" in
+		"${FILE_NAME}")
+			eval browser_download_url=$(cat ${API_FILE} | jq ".assets[${i}].browser_download_url" 2> /dev/null)
+			if [[ ${browser_download_url} || ${browser_download_url} != null ]]
+			then
+				# echo $browser_download_url
+				[[ ${TARGET_FILE_RENAME} ]] && _FILE=${TARGET_FILE_RENAME} || _FILE=${FILE_NAME}
+				wget --quiet --no-check-certificate \
+					--tries 5 --timeout 20 \
+					${browser_download_url} \
+					-O ${TARGET_FILE_PATH}/${_FILE}
+				if [[ $? != 0 || ! -f ${TARGET_FILE_PATH}/${_FILE} ]]
+				then
+					ECHO "Failed to download ${PKG_NAME} ..."
+				else
+					ECHO "API: ${API_URL} ; ${FILE_NAME} ; Rename as ${_FILE}"
+					chmod 777 ${TARGET_FILE_PATH}/${_FILE}
+				fi
+			fi
+		;;
+		esac
+	done
+	rm -f ${API_FILE}
 }

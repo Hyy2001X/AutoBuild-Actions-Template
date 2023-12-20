@@ -4,17 +4,17 @@
 
 支持的 OpenWrt 源码: `coolsnowwolf/lede`、`immortalwrt/immortalwrt`、`openwrt/openwrt`、`lienol/openwrt`
 
-   🎈 **提示**: 文档中的 **TARGET_PROFILE** 为编译的设备名称(代号), 例如: `d-team_newifi-d2`、`asus_rt-acrh17`、`x86_64`
-   
-   **TARGET_PROFILE** 本地获取方法如下:
-   
-   ① 执行`make menuconfig`, 进行设备选择后即可保存并退出
-   
-   ② 在源码目录执行`egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
-   
-   或`grep 'TARGET_PROFILE' .config` 均可获取 **TARGET_PROFILE**
+🔔 **为了你的账号安全, 请不要使用 SSH 连接 Github Action**, `.config`配置以及固件定制等操作请务必在本地完成 🔔
 
-   🔔 **为了你的账号安全, 请不要使用 SSH 连接 Github Action**, `.config`配置以及固件定制等操作请务必在本地完成 🔔
+🎈 **提示**: 文档中的 **TARGET_PROFILE** 为编译的设备名称(代号), 例如: `d-team_newifi-d2`、`asus_rt-acrh17`、`x86_64`
+   
+**TARGET_PROFILE** 本地获取方法如下:
+   
+① 执行`make menuconfig`, 进行设备选择后即可保存并退出
+   
+② 在源码目录执行`egrep -o "CONFIG_TARGET.*DEVICE.*=y" .config | sed -r 's/.*DEVICE_(.*)=y/\1/'`
+   
+或`grep 'TARGET_PROFILE' .config` 均可获取 **TARGET_PROFILE**
 
 ## 一、定制固件(可选)
 
