@@ -27,7 +27,7 @@ Firmware_Diy_Start() {
 		zzz_Default_Version="$(egrep -o "R[0-9]+\.[0-9]+\.[0-9]+" ${Version_File})"
 		OP_VERSION="${zzz_Default_Version}-${Compile_Date}"
 	;;
-	immortalwrt/immortalwrt)
+	immortalwrt/immortalwrt | padavanonly/immortalwrtARM)
 		Version_File=package/base-files/files/etc/openwrt_release
 		OP_VERSION="${OP_VERSION_HEAD}${Compile_Date}"
 	;;
@@ -123,14 +123,7 @@ EOF
 Firmware_Diy_Main() {
 	ECHO "[Firmware_Diy_Main] Starting ..."
 	CD ${WORK}
-	chmod 777 -R ${Scripts} ${CustomFiles}
-	if [[ ${AutoBuild_Features} == true ]]
-	then
-		AddPackage git other AutoBuild-Packages Hyy2001X master
-		echo -e "\nCONFIG_PACKAGE_luci-app-autoupdate=y" >> ${CONFIG_FILE}
-		for i in ${GITHUB_ENV} $(PKG_Finder d package AutoBuild-Packages)/autoupdate/files/etc/autoupdate/default
-		do
-			cat >> ${i} <<EOF
+	cat >> ${GITHUB_ENV} <<EOF
 Author=${Author}
 Github=${Github}
 TARGET_PROFILE=${TARGET_PROFILE}
@@ -143,8 +136,25 @@ OP_REPO=${OP_REPO}
 OP_BRANCH=${OP_BRANCH}
 
 EOF
-		done ; unset i
+	chmod 777 -R ${Scripts} ${CustomFiles}
+	if [[ ${AutoBuild_Features} == true ]]
+	then
+		AddPackage git other AutoBuild-Packages Hyy2001X master
+		echo -e "\nCONFIG_PACKAGE_luci-app-autoupdate=y" >> ${CONFIG_FILE}
 		AutoUpdate_Version=$(awk -F '=' '/Version/{print $2}' $(PKG_Finder d package AutoBuild-Packages)/autoupdate/files/bin/autoupdate | awk 'NR==1')
+		cat >> $(PKG_Finder d package AutoBuild-Packages)/autoupdate/files/etc/autoupdate/default <<EOF
+Author=${Author}
+Github=${Github}
+TARGET_PROFILE=${TARGET_PROFILE}
+TARGET_BOARD=${TARGET_BOARD}
+TARGET_SUBTARGET=${TARGET_SUBTARGET}
+TARGET_FLAG=${TARGET_FLAG}
+OP_VERSION=${OP_VERSION}
+OP_AUTHOR=${OP_AUTHOR}
+OP_REPO=${OP_REPO}
+OP_BRANCH=${OP_BRANCH}
+
+EOF
 		Copy ${CustomFiles}/Depends/tools ${BASE_FILES}/bin
 		Copy ${CustomFiles}/Depends/profile ${BASE_FILES}/etc
 		Copy ${CustomFiles}/Depends/base-files-essential ${BASE_FILES}/lib/upgrade/keep.d
@@ -159,7 +169,7 @@ EOF
 				sed -i "s?${zzz_Default_Version}?${zzz_Default_Version} @ ${Author} [${Display_Date}]?g" ${Version_File}
 			fi
 		;;
-		immortalwrt/immortalwrt)
+		immortalwrt/immortalwrt | padavanonly/immortalwrtARM)
 			Copy ${CustomFiles}/Depends/openwrt_release_${OP_AUTHOR} ${BASE_FILES}/etc openwrt_release
 			if [[ -n ${TARGET_FLAG} ]]
 			then
@@ -200,6 +210,7 @@ EOF
 			sed -i "s/${Old_IP}/${Default_IP}/g" ${BASE_FILES}/bin/config_generate
 		fi
 	fi
+ 	echo -e "### VARIABLE LIST ###\n$(cat ${GITHUB_ENV})\n"
 	ECHO "[Firmware_Diy_Main] Done"
 }
 
@@ -230,6 +241,9 @@ EOF
 			;;
 			openwrt/openwrt*)
 				Patch_Path=${CustomFiles}/Patches/openwrt-openwrt
+			;;
+			padavanonly/immortalwrtARM*)
+				Patch_Path=${CustomFiles}/Patches/padavanonly-immortalwrtARM
 			;;
 			esac
 			if [[ -d ${Patch_Path} ]]
@@ -309,12 +323,14 @@ EOF
 
 Firmware_Diy_End() {
 	ECHO "[Firmware_Diy_End] Starting ..."
+	source ${GITHUB_ENV}
 	ECHO "[$(date "+%H:%M:%S")] Actions Avaliable: $(df -h | grep "/dev/root" | awk '{printf $4}')"
 	cd ${WORK}
+	echo -e "### FIRMWARE OUTPUT ###"
+	du -ah bin/targets | egrep -v "${Regex_Skip}"
 	MKDIR ${WORK}/bin/Firmware
 	Fw_Path="${WORK}/bin/targets/${TARGET_BOARD}/${TARGET_SUBTARGET}"
-	cd ${Fw_Path}
-	echo -e "### FIRMWARE OUTPUT ###\n$(ls -1)\n"
+	cd "${Fw_Path}"
 	case "${TARGET_BOARD}" in
 	x86)
 		if [[ ${x86_Full_Images} == true ]]
@@ -565,6 +581,7 @@ ReleaseDL() {
 			then
 				# echo $browser_download_url
 				[[ ${TARGET_FILE_RENAME} ]] && _FILE=${TARGET_FILE_RENAME} || _FILE=${FILE_NAME}
+    				ECHO "Downloading link ${browser_download_url} ..."
 				wget --quiet --no-check-certificate \
 					--tries 5 --timeout 20 \
 					${browser_download_url} \
@@ -573,7 +590,7 @@ ReleaseDL() {
 				then
 					ECHO "Failed to download ${PKG_NAME} ..."
 				else
-					ECHO "API: ${API_URL} ; ${FILE_NAME} ; Rename as ${_FILE}"
+					ECHO "API: ${API_URL} ; ${FILE_NAME} ; ${_FILE} ; $(du -h ${TARGET_FILE_PATH}/${_FILE})"
 					chmod 777 ${TARGET_FILE_PATH}/${_FILE}
 				fi
 			fi

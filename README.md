@@ -1,5 +1,7 @@
 # OpenWrt-Actions & One-key AutoUpdate
 
+AutoBuild-Actions 仓库地址: [AutoBuild-Actions-BETA](https://github.com/Hyy2001X/AutoBuild-Actions-BETA)
+
 自用修改版软件包地址: [AutoBuild-Packages](https://github.com/Hyy2001X/AutoBuild-Packages)
 
 支持的 OpenWrt 源码: `coolsnowwolf/lede`、`immortalwrt/immortalwrt`、`openwrt/openwrt`、`lienol/openwrt`
@@ -91,7 +93,7 @@
 
    首先需要打开`TTYD 终端`或者使用`SSH`, 按需输入下方指令:
 
-   常规更新固件: `autoupdate`
+   更新固件: `autoupdate`
 
    使用镜像加速更新固件: `autoupdate -P`
 
@@ -105,28 +107,7 @@
    
    打印运行日志:  `autoupdate --log`
 
-   列出相关信息: `autoupdate --list`
-
-   检查运行环境: `autoupdate --chk`
-
    查看脚本帮助: `autoupdate --help`
-
-   **注意:** 部分参数可一起使用, 例如 `autoupdate -n -P -F --path /mnt/sda1`
-
-## 使用 tools 固件工具箱(可选)
-
-   打开`TTYD 终端`或者使用`SSH`, 执行指令`tools`即可启动固件工具箱
-
-   当前支持以下功能:
-
-   - USB 扩展内部空间
-   - Samba 相关设置
-   - 打印端口占用详细列表
-   - 打印所有硬盘信息
-   - 网络检查 (基础网络 | Google 连接检测)
-   - AutoBuild 固件环境修复
-   - 系统信息监控
-   - 打印在线设备列表
 
 ## 鸣谢
 
